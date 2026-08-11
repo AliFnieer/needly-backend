@@ -21,8 +21,8 @@ This repository contains the backend API, business logic, database layer, authen
 * 🔄 Recurring shopping items
 * 🏷️ Categories, quantities, and units
 * 🔒 Authentication and authorization
-* 🗄️ PostgreSQL persistence
-* ⚡ Redis for caching and real-time infrastructure
+* 🗄️ PostgreSQL persistence with GORM
+* ⚡ Redis for caching and Pub/Sub
 * 🐳 Docker-based development
 * 🧪 Automated tests
 * 🚀 CI/CD with GitHub Actions
@@ -53,10 +53,11 @@ The backend follows a feature-oriented architecture designed to keep business lo
             ┌──────────────┐              ┌──────────────┐
             │  PostgreSQL  │              │    Redis     │
             │              │              │              │
-            │ Persistent   │              │ Cache /      │
-            │ application  │              │ pub/sub /    │
-            │ data         │              │ real-time    │
-            └──────────────┘              └──────────────┘
+            │ GORM         │              │ Cache /      │
+            │ Persistence  │              │ Pub/Sub /    │
+            │              │              │ Temporary    │
+            └──────────────┘              │ state        │
+                                          └──────────────┘
 ```
 
 ### Core domain
@@ -83,24 +84,56 @@ A shopping list belongs to a **household**, rather than an individual user. This
 
 ## 🛠️ Tech Stack
 
-| Technology     | Purpose                                        |
-| -------------- | ---------------------------------------------- |
-| Go             | Backend language                               |
-| Gin            | HTTP framework                                 |
-| PostgreSQL     | Primary database                               |
-| Redis          | Caching, pub/sub, and real-time infrastructure |
-| WebSocket      | Real-time client communication                 |
-| JWT            | Authentication                                 |
-| sqlc           | Type-safe database access                      |
-| golang-migrate | Database migrations                            |
-| Docker         | Containerization                               |
-| GitHub Actions | CI/CD                                          |
+| Technology     | Purpose                               |
+| -------------- | ------------------------------------- |
+| Go             | Backend language                      |
+| Gin            | HTTP framework                        |
+| GORM           | ORM and database access               |
+| PostgreSQL     | Primary database                      |
+| Redis          | Caching, Pub/Sub, and temporary state |
+| WebSocket      | Real-time client communication        |
+| JWT            | Authentication                        |
+| golang-migrate | Database migrations                   |
+| Docker         | Containerization                      |
+| GitHub Actions | CI/CD                                 |
+
+---
+
+## 🗃️ Database
+
+Needly uses **PostgreSQL** as its primary persistent data store.
+
+**GORM** is used as the ORM for:
+
+* Database models
+* Queries
+* Relationships
+* Transactions
+* CRUD operations
+
+Example domain relationships:
+
+```text
+User
+ │
+ ├──< HouseholdMember >── Household
+ │                           │
+ │                           └──< ShoppingList
+ │                                    │
+ │                                    └──< ShoppingItem
+ │
+ └──< ItemHistory
+```
+
+The database remains the **source of truth** for persistent application data.
+
+Redis is used as a supporting infrastructure component and is not intended to replace PostgreSQL.
 
 ---
 
 ## ⚡ Redis
 
-Redis is used as a supporting infrastructure component rather than the primary data store.
+Redis provides fast, temporary data storage and messaging capabilities.
 
 Potential uses within Needly include:
 
@@ -127,40 +160,33 @@ Needly API
 
 ### Pub/Sub
 
-Redis Pub/Sub can be used to distribute events between backend instances.
+Redis Pub/Sub can distribute events between multiple backend instances.
 
 ```text
-                    ┌──────────────┐
-                    │ PostgreSQL   │
-                    └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  Needly API  │
-                    │   Instance 1 │
-                    └──────┬───────┘
-                           │
-                     Redis Pub/Sub
-                           │
-                    ┌──────┴───────┐
-                    │              │
-                    ▼              ▼
-              API Instance 2   API Instance 3
+                 ┌─────────────────┐
+                 │    Redis        │
+                 │    Pub/Sub      │
+                 └───────┬─────────┘
+                         │
+             ┌───────────┼───────────┐
+             ▼           ▼           ▼
+        API Instance  API Instance  API Instance
+             1             2             3
 ```
 
-This allows real-time events to continue working when the backend is eventually scaled horizontally.
+This provides a path toward horizontally scaling the WebSocket infrastructure.
 
 ### Temporary data
 
-Redis can also be used for short-lived data such as:
+Redis may also be used for short-lived data such as:
 
-* Refresh-token metadata
 * Rate limiting
 * Invitation tokens
 * Temporary synchronization state
-* WebSocket connection information
+* WebSocket connection metadata
+* Short-lived caches
 
-The exact Redis responsibilities may evolve as the application grows.
+Redis responsibilities will evolve as the application grows.
 
 ---
 
@@ -181,12 +207,16 @@ The exact Redis responsibilities may evolve as the application grows.
 │   ├── history/
 │   ├── websocket/
 │   ├── cache/
+│   │
 │   ├── database/
+│   │   ├── models/
+│   │   ├── postgres.go
+│   │   └── repositories/
+│   │
 │   ├── middleware/
 │   └── server/
 │
 ├── migrations/
-├── sql/
 ├── tests/
 │
 ├── Dockerfile
@@ -216,7 +246,7 @@ git clone https://github.com/YOUR_USERNAME/needly-backend.git
 cd needly-backend
 ```
 
-### Environment variables
+### Environment Variables
 
 Create a `.env` file:
 
@@ -235,26 +265,26 @@ JWT_REFRESH_TOKEN_TTL=720h
 
 > Never commit real secrets to the repository.
 
-### Start dependencies
+### Start Dependencies
 
 ```bash
 docker compose up -d
 ```
 
-This starts the local development dependencies:
+This starts:
 
 ```text
 PostgreSQL
 Redis
 ```
 
-### Run migrations
+### Run Migrations
 
 ```bash
 make migrate-up
 ```
 
-### Start the server
+### Start the Server
 
 ```bash
 go run ./cmd/server
@@ -313,15 +343,15 @@ PATCH  /api/v1/items/:id
 DELETE /api/v1/items/:id
 ```
 
-### Real-time
+### Real-Time
 
 ```text
 GET /api/v1/ws
 ```
 
-WebSocket events are used to notify connected household members about changes.
+WebSocket events notify connected household members when shared data changes.
 
-Example:
+Example event:
 
 ```json
 {
@@ -334,7 +364,7 @@ Example:
 
 ## 🧪 Testing
 
-Run the test suite with:
+Run the test suite:
 
 ```bash
 go test ./...
@@ -346,7 +376,16 @@ Run tests with the race detector:
 go test -race ./...
 ```
 
-The project aims to maintain strong coverage around business logic, API behavior, authentication, caching, and real-time synchronization.
+The project aims to maintain strong test coverage around:
+
+* Business logic
+* API behavior
+* Authentication
+* Database operations
+* Redis functionality
+* WebSocket communication
+* Authorization
+* Error handling
 
 ---
 
@@ -367,15 +406,49 @@ docker compose down
 The local environment consists of:
 
 ```text
-┌─────────────────┐
-│  Needly API     │
-│  Go + Gin       │
-└───────┬─────────┘
-        │
-   ┌────┴────┐
-   ▼         ▼
-PostgreSQL  Redis
+                    ┌─────────────────┐
+                    │   Needly API    │
+                    │   Go + Gin      │
+                    └───────┬─┬───────┘
+                            │ │
+                    ┌───────┘ └───────┐
+                    ▼                 ▼
+             ┌─────────────┐   ┌─────────────┐
+             │ PostgreSQL  │   │    Redis    │
+             │   + GORM    │   │             │
+             └─────────────┘   └─────────────┘
 ```
+
+---
+
+## 🔄 Real-Time Synchronization
+
+Needly uses WebSockets to synchronize changes between household members.
+
+For example:
+
+```text
+User A
+  │
+  │ checks "Milk"
+  ▼
+Needly API
+  │
+  ├── Update PostgreSQL
+  │
+  └── Publish event
+          │
+          ▼
+        Redis
+          │
+          ▼
+   WebSocket Server
+          │
+          ▼
+       User B
+```
+
+User B can see the change immediately without refreshing the application.
 
 ---
 
@@ -391,6 +464,7 @@ PostgreSQL  Redis
 * [ ] Shopping items
 * [ ] Item completion
 * [ ] Basic WebSocket synchronization
+* [ ] PostgreSQL + GORM
 * [ ] Redis integration
 
 ### v0.2
@@ -424,11 +498,9 @@ PostgreSQL  Redis
 
 ## 🔗 Related Repository
 
-Mobile application:
+### Needly Mobile
 
-**Needly Mobile**
-
-The mobile application is maintained independently and communicates with this backend through the REST API and WebSocket interface.
+The mobile application is maintained in a separate repository and communicates with this backend through the REST API and WebSocket interface.
 
 ---
 
