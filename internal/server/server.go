@@ -7,6 +7,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
+	"github.com/AliFnieer/needly-backend/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -18,6 +19,7 @@ type Server struct {
 	cfg    *config.Config
 	db     *gorm.DB
 	redis  *redis.Client
+	hub    *websocket.Hub
 }
 
 // NewServer creates a new Gin server with all routes registered.
@@ -33,6 +35,10 @@ func NewServer(cfg *config.Config, db *gorm.DB, redisClient *redis.Client) *Serv
 		db:     db,
 		redis:  redisClient,
 	}
+
+	// Create and start websocket hub
+	srv.hub = websocket.NewHub()
+	go srv.hub.Run()
 
 	// Global middleware
 	srv.setupMiddleware()
@@ -69,6 +75,9 @@ func (s *Server) setupRoutes() {
 	household.RegisterRoutes(apiV1, s.db, s.cfg)
 	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg)
 	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg)
+
+	// Register websocket routes
+	websocket.RegisterRoutes(apiV1, s.hub)
 }
 
 // Run starts the HTTP server on the given address.
