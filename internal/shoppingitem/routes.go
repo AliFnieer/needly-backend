@@ -2,6 +2,7 @@ package shoppingitem
 
 import (
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -9,7 +10,8 @@ import (
 
 // RegisterRoutes registers shopping item routes on the given router group.
 func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
-	service := NewService(db)
+	historySvc := history.NewService(db)
+	service := NewService(db, historySvc)
 	controller := NewController(service)
 
 	// All shopping item routes require authentication
