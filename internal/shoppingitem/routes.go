@@ -24,5 +24,6 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, ca
 		itemRoutes.PUT("/items/:id", controller.Update)
 		itemRoutes.PATCH("/items/:id/completed", controller.SetCompleted)
 		itemRoutes.DELETE("/items/:id", controller.Delete)
+		itemRoutes.POST("/history/:id/re-add", controller.ReAddFromHistory)
 	}
 }
