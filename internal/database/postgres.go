@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/auth"
+	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
@@ -70,6 +71,7 @@ func autoMigrate(db *gorm.DB) error {
 		&auth.User{},
 		&household.Household{},
 		&household.HouseholdMember{},
+		&category.Category{},
 		&shoppinglist.ShoppingList{},
 		&shoppingitem.ShoppingItem{},
 	)

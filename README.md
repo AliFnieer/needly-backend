@@ -333,6 +333,16 @@ PATCH  /api/v1/lists/:id
 DELETE /api/v1/lists/:id
 ```
 
+### Categories
+
+```text
+GET    /api/v1/categories
+POST   /api/v1/categories
+GET    /api/v1/categories/:id
+PUT    /api/v1/categories/:id
+DELETE /api/v1/categories/:id
+```
+
 ### Shopping Items
 
 ```text
@@ -340,7 +350,19 @@ GET    /api/v1/lists/:id/items
 POST   /api/v1/lists/:id/items
 GET    /api/v1/items/:id
 PATCH  /api/v1/items/:id
+PUT    /api/v1/items/:id
 DELETE /api/v1/items/:id
+```
+
+Shopping items support an optional `category_id` field that links to a category:
+
+```json
+{
+  "name": "Milk",
+  "quantity": 2,
+  "unit": "liters",
+  "category_id": 3
+}
 ```
 
 ### Real-Time
