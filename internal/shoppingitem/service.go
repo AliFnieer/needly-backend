@@ -189,6 +189,30 @@ func (s *Service) Delete(id uint) error {
 	return nil
 }
 
+// ReAddFromHistory creates a new shopping item from a history entry, allowing one-tap re-add.
+func (s *Service) ReAddFromHistory(historyID, userID uint) (*ShoppingItem, error) {
+	entry, err := s.history.GetByID(historyID)
+	if err != nil {
+		return nil, err
+	}
+
+	item := ShoppingItem{
+		ListID:      entry.ListID,
+		CategoryID:  entry.CategoryID,
+		Name:        entry.Name,
+		Quantity:    entry.Quantity,
+		Unit:        entry.Unit,
+		IsCompleted: false,
+		CreatedBy:   userID,
+	}
+
+	if err := s.db.Create(&item).Error; err != nil {
+		return nil, fmt.Errorf("failed to re-add shopping item from history: %w", err)
+	}
+
+	return s.GetByID(item.ID)
+}
+
 // validateCategoryID checks that a given category ID exists, if provided.
 func (s *Service) validateCategoryID(categoryID *uint) error {
 	if categoryID == nil || *categoryID == 0 {

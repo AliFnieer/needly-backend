@@ -201,3 +201,26 @@ func (ctl *Controller) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
+
+// ReAddFromHistory handles POST /api/v1/history/:id/re-add
+func (ctl *Controller) ReAddFromHistory(c *gin.Context) {
+	userID, ok := getCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	historyID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	item, err := ctl.service.ReAddFromHistory(historyID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, item)
+}
