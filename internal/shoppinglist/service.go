@@ -47,7 +47,7 @@ func (s *Service) Create(householdID, userID uint, req *CreateRequest) (*Shoppin
 // GetByID retrieves a shopping list by ID.
 func (s *Service) GetByID(id uint) (*ShoppingList, error) {
 	var list ShoppingList
-	if err := s.db.Preload("Items").First(&list, id).Error; err != nil {
+	if err := s.db.Preload("Items.Category").First(&list, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("shopping list not found")
 		}
@@ -59,7 +59,7 @@ func (s *Service) GetByID(id uint) (*ShoppingList, error) {
 // ListByHouseholdID retrieves all shopping lists for a household.
 func (s *Service) ListByHouseholdID(householdID uint) ([]ShoppingList, error) {
 	var lists []ShoppingList
-	if err := s.db.Preload("Items").Where("household_id = ?", householdID).Order("created_at DESC").Find(&lists).Error; err != nil {
+	if err := s.db.Preload("Items.Category").Where("household_id = ?", householdID).Order("created_at DESC").Find(&lists).Error; err != nil {
 		return nil, fmt.Errorf("failed to list shopping lists: %w", err)
 	}
 	return lists, nil
