@@ -1,8 +1,10 @@
 package server
 
 import (
+	"time"
+
 	"github.com/AliFnieer/needly-backend/internal/auth"
-	"github.com/AliFnieer/needly-backend/internal/category"
+	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/household"
@@ -15,12 +17,18 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	// defaultCacheTTL is the default time-to-live for cached data.
+	defaultCacheTTL = 5 * time.Minute
+)
+
 // Server represents the HTTP server with its dependencies.
 type Server struct {
 	engine *gin.Engine
 	cfg    *config.Config
 	db     *gorm.DB
 	redis  *redis.Client
+	cache  *cache.Cache
 	hub    *websocket.Hub
 }
 
@@ -36,6 +44,7 @@ func NewServer(cfg *config.Config, db *gorm.DB, redisClient *redis.Client) *Serv
 		cfg:    cfg,
 		db:     db,
 		redis:  redisClient,
+		cache:  cache.NewCache(redisClient, defaultCacheTTL),
 	}
 
 	// Create and start websocket hub
@@ -77,8 +86,8 @@ func (s *Server) setupRoutes() {
 	category.RegisterRoutes(apiV1, s.db, s.cfg)
 	history.RegisterRoutes(apiV1, s.db, s.cfg)
 	household.RegisterRoutes(apiV1, s.db, s.cfg)
-	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg)
-	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg)
+	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
+	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
 
 	// Register websocket routes
 	websocket.RegisterRoutes(apiV1, s.hub)

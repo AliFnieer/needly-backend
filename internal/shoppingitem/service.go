@@ -1,19 +1,28 @@
 package shoppingitem
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/AliFnieer/needly-backend/internal/category"
-	"github.com/AliFnieer/needly-backend/internal/history"
+	"github.com/AliFnieer/needly-backend/internal/cache"
 	"gorm.io/gorm"
+)
+
+const (
+	// itemCacheKeyPrefix is the prefix for individual shopping item cache keys.
+	itemCacheKeyPrefix = "shoppingitem:"
+	// listItemsCacheKeyPrefix is the prefix for list items cache keys.
+	listItemsCacheKeyPrefix = "list:"
+	// listItemsCacheKeySuffix is the suffix for list items cache keys.
+	listItemsCacheKeySuffix = ":items"
 )
 
 // Service handles shopping item business logic.
 type Service struct {
-	db      *gorm.DB
-	history *history.Service
+	db    *gorm.DB
+	cache *cache.Cache
 }
 
 // CreateRequest is the payload for creating a shopping item.
@@ -35,10 +44,10 @@ type UpdateRequest struct {
 }
 
 // NewService creates a new shopping item service.
-func NewService(db *gorm.DB, historySvc *history.Service) *Service {
+func NewService(db *gorm.DB, cache *cache.Cache) *Service {
 	return &Service{
-		db:      db,
-		history: historySvc,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -74,34 +83,76 @@ func (s *Service) Create(listID, userID uint, req *CreateRequest) (*ShoppingItem
 		return nil, fmt.Errorf("failed to create shopping item: %w", err)
 	}
 
-	// Record history immediately if the item is created as completed
-	if item.IsCompleted && s.history != nil {
-		if _, err := s.history.Record(item.ListID, item.ID, userID, item.Name, item.Quantity, item.Unit, item.CategoryID); err != nil {
-			return nil, fmt.Errorf("failed to record shopping history: %w", err)
-		}
-	}
+	// Invalidate the list items cache since a new item was added
+	s.invalidateListItems(listID)
 
-	return s.GetByID(item.ID)
+	return &item, nil
 }
 
 // GetByID retrieves a shopping item by ID.
 func (s *Service) GetByID(id uint) (*ShoppingItem, error) {
+	ctx := context.Background()
+	cacheKey := itemCacheKey(id)
+
+	// Try cache first
 	var item ShoppingItem
-	if err := s.db.Preload("Category").First(&item, id).Error; err != nil {
+	if s.cache != nil {
+		hit, err := s.cache.Get(ctx, cacheKey, &item)
+		if err != nil {
+			// Log and fall through to DB on cache error
+			fmt.Printf("cache get error for %s: %v\n", cacheKey, err)
+		} else if hit {
+			return &item, nil
+		}
+	}
+
+	// Cache miss - load from DB
+	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("shopping item not found")
 		}
 		return nil, fmt.Errorf("failed to get shopping item: %w", err)
 	}
+
+	// Populate cache
+	if s.cache != nil {
+		if err := s.cache.Set(ctx, cacheKey, &item); err != nil {
+			fmt.Printf("cache set error for %s: %v\n", cacheKey, err)
+		}
+	}
+
 	return &item, nil
 }
 
 // ListByListID retrieves all items in a shopping list.
 func (s *Service) ListByListID(listID uint) ([]ShoppingItem, error) {
+	ctx := context.Background()
+	cacheKey := listItemsCacheKey(listID)
+
+	// Try cache first
 	var items []ShoppingItem
-	if err := s.db.Preload("Category").Where("list_id = ?", listID).Order("is_completed ASC, created_at ASC").Find(&items).Error; err != nil {
+	if s.cache != nil {
+		hit, err := s.cache.Get(ctx, cacheKey, &items)
+		if err != nil {
+			// Log and fall through to DB on cache error
+			fmt.Printf("cache get error for %s: %v\n", cacheKey, err)
+		} else if hit {
+			return items, nil
+		}
+	}
+
+	// Cache miss - load from DB
+	if err := s.db.Where("list_id = ?", listID).Order("is_completed ASC, created_at ASC").Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("failed to list shopping items: %w", err)
 	}
+
+	// Populate cache
+	if s.cache != nil {
+		if err := s.cache.Set(ctx, cacheKey, &items); err != nil {
+			fmt.Printf("cache set error for %s: %v\n", cacheKey, err)
+		}
+	}
+
 	return items, nil
 }
 
@@ -149,7 +200,10 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, er
 		return nil, fmt.Errorf("failed to update shopping item: %w", err)
 	}
 
-	return s.GetByID(item.ID)
+	// Invalidate caches for this item and its list
+	s.invalidateItem(item.ID, item.ListID)
+
+	return &item, nil
 }
 
 // UpdateCompleted updates just the completion status of a shopping item.
@@ -174,11 +228,22 @@ func (s *Service) UpdateCompleted(id, userID uint, isCompleted bool) (*ShoppingI
 		return nil, fmt.Errorf("failed to update shopping item status: %w", err)
 	}
 
-	return s.GetByID(item.ID)
+	// Invalidate caches for this item and its list
+	s.invalidateItem(item.ID, item.ListID)
+
+	return &item, nil
 }
 
 // Delete removes a shopping item.
 func (s *Service) Delete(id uint) error {
+	var item ShoppingItem
+	if err := s.db.First(&item, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("shopping item not found")
+		}
+		return fmt.Errorf("failed to get shopping item: %w", err)
+	}
+
 	result := s.db.Delete(&ShoppingItem{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete shopping item: %w", result.Error)
@@ -186,44 +251,51 @@ func (s *Service) Delete(id uint) error {
 	if result.RowsAffected == 0 {
 		return errors.New("shopping item not found")
 	}
+
+	// Invalidate caches for this item and its list
+	s.invalidateItem(item.ID, item.ListID)
+
 	return nil
 }
 
-// ReAddFromHistory creates a new shopping item from a history entry, allowing one-tap re-add.
-func (s *Service) ReAddFromHistory(historyID, userID uint) (*ShoppingItem, error) {
-	entry, err := s.history.GetByID(historyID)
-	if err != nil {
-		return nil, err
-	}
-
-	item := ShoppingItem{
-		ListID:      entry.ListID,
-		CategoryID:  entry.CategoryID,
-		Name:        entry.Name,
-		Quantity:    entry.Quantity,
-		Unit:        entry.Unit,
-		IsCompleted: false,
-		CreatedBy:   userID,
-	}
-
-	if err := s.db.Create(&item).Error; err != nil {
-		return nil, fmt.Errorf("failed to re-add shopping item from history: %w", err)
-	}
-
-	return s.GetByID(item.ID)
+// itemCacheKey builds the cache key for a single shopping item.
+func itemCacheKey(id uint) string {
+	return fmt.Sprintf("%s%d", itemCacheKeyPrefix, id)
 }
 
-// validateCategoryID checks that a given category ID exists, if provided.
-func (s *Service) validateCategoryID(categoryID *uint) error {
-	if categoryID == nil || *categoryID == 0 {
-		return nil
+// listItemsCacheKey builds the cache key for a list's items.
+func listItemsCacheKey(listID uint) string {
+	return fmt.Sprintf("%s%d%s", listItemsCacheKeyPrefix, listID, listItemsCacheKeySuffix)
+}
+
+// invalidateItem removes cached data for a specific item and its list.
+func (s *Service) invalidateItem(itemID, listID uint) {
+	if s.cache == nil {
+		return
 	}
-	var cat category.Category
-	if err := s.db.First(&cat, *categoryID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("category not found")
+
+	ctx := context.Background()
+	keys := []string{
+		itemCacheKey(itemID),
+		listItemsCacheKey(listID),
+	}
+
+	for _, key := range keys {
+		if err := s.cache.Delete(ctx, key); err != nil {
+			fmt.Printf("cache delete error for %s: %v\n", key, err)
 		}
-		return fmt.Errorf("failed to validate category: %w", err)
 	}
-	return nil
+}
+
+// invalidateListItems removes cached data for a list's items.
+func (s *Service) invalidateListItems(listID uint) {
+	if s.cache == nil {
+		return
+	}
+
+	ctx := context.Background()
+	key := listItemsCacheKey(listID)
+	if err := s.cache.Delete(ctx, key); err != nil {
+		fmt.Printf("cache delete error for %s: %v\n", key, err)
+	}
 }
