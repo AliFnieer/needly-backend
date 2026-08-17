@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/AliFnieer/needly-backend/internal/cache"
+	"github.com/AliFnieer/needly-backend/internal/category"
+	"github.com/AliFnieer/needly-backend/internal/history"
 	"gorm.io/gorm"
 )
 
@@ -21,8 +23,9 @@ const (
 
 // Service handles shopping item business logic.
 type Service struct {
-	db    *gorm.DB
-	cache *cache.Cache
+	db      *gorm.DB
+	cache   *cache.Cache
+	history *history.Service
 }
 
 // CreateRequest is the payload for creating a shopping item.
@@ -44,11 +47,28 @@ type UpdateRequest struct {
 }
 
 // NewService creates a new shopping item service.
-func NewService(db *gorm.DB, cache *cache.Cache) *Service {
+func NewService(db *gorm.DB, cache *cache.Cache, historySvc *history.Service) *Service {
 	return &Service{
-		db:    db,
-		cache: cache,
+		db:      db,
+		cache:   cache,
+		history: historySvc,
 	}
+}
+
+func (s *Service) validateCategoryID(categoryID *uint) error {
+	if categoryID == nil || *categoryID == 0 {
+		return nil
+	}
+
+	var cat category.Category
+	if err := s.db.First(&cat, *categoryID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("category not found")
+		}
+		return fmt.Errorf("failed to validate category: %w", err)
+	}
+
+	return nil
 }
 
 // Create adds a new item to a shopping list.
@@ -256,6 +276,34 @@ func (s *Service) Delete(id uint) error {
 	s.invalidateItem(item.ID, item.ListID)
 
 	return nil
+}
+
+// ReAddFromHistory recreates a shopping item from a completed history entry.
+func (s *Service) ReAddFromHistory(historyID, userID uint) (*ShoppingItem, error) {
+	var entry history.ShoppingHistory
+	if err := s.db.First(&entry, historyID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("shopping history entry not found")
+		}
+		return nil, fmt.Errorf("failed to get shopping history entry: %w", err)
+	}
+
+	item := ShoppingItem{
+		ListID:      entry.ListID,
+		CategoryID:  entry.CategoryID,
+		Name:        entry.Name,
+		Quantity:    entry.Quantity,
+		Unit:        entry.Unit,
+		IsCompleted: false,
+		CreatedBy:   userID,
+	}
+
+	if err := s.db.Create(&item).Error; err != nil {
+		return nil, fmt.Errorf("failed to recreate shopping item from history: %w", err)
+	}
+
+	s.invalidateListItems(item.ListID)
+	return &item, nil
 }
 
 // itemCacheKey builds the cache key for a single shopping item.
