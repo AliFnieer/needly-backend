@@ -8,6 +8,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
@@ -74,5 +75,6 @@ func autoMigrate(db *gorm.DB) error {
 		&category.Category{},
 		&shoppinglist.ShoppingList{},
 		&shoppingitem.ShoppingItem{},
+		&history.ShoppingHistory{},
 	)
 }
