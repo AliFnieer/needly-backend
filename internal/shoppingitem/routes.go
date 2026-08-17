@@ -11,7 +11,8 @@ import (
 
 // RegisterRoutes registers shopping item routes on the given router group.
 func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, cache *cache.Cache) {
-	service := NewService(db, cache)
+	historySvc := history.NewService(db)
+	service := NewService(db, cache, historySvc)
 	controller := NewController(service)
 
 	// All shopping item routes require authentication
