@@ -333,6 +333,16 @@ PATCH  /api/v1/lists/:id
 DELETE /api/v1/lists/:id
 ```
 
+### Categories
+
+```text
+GET    /api/v1/categories
+POST   /api/v1/categories
+GET    /api/v1/categories/:id
+PUT    /api/v1/categories/:id
+DELETE /api/v1/categories/:id
+```
+
 ### Shopping Items
 
 ```text
@@ -340,8 +350,33 @@ GET    /api/v1/lists/:id/items
 POST   /api/v1/lists/:id/items
 GET    /api/v1/items/:id
 PATCH  /api/v1/items/:id
+PUT    /api/v1/items/:id
 DELETE /api/v1/items/:id
 ```
+
+Shopping items support an optional `category_id`, decimal `quantity`, and `unit`:
+
+```json
+{
+  "name": "Milk",
+  "quantity": 1.5,
+  "unit": "liters",
+  "category_id": 3
+}
+```
+
+Quantity supports decimal values (e.g. `0.5`, `1.5`) and is validated between `0.001` and `1,000,000`. Unit is optional, trimmed, and max 50 characters.
+
+### Shopping History
+
+```text
+GET    /api/v1/lists/:id/history
+GET    /api/v1/households/:id/history
+GET    /api/v1/history/:id
+DELETE /api/v1/history/:id
+```
+
+Completed shopping items are automatically recorded in shopping history with a snapshot of the item (name, quantity, unit, category), who completed it, and when. History entries are preserved even if the original item is later deleted or the list is removed.
 
 ### Real-Time
 

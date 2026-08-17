@@ -6,6 +6,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
@@ -82,6 +83,8 @@ func (s *Server) setupRoutes() {
 
 	// Register feature routes
 	auth.RegisterRoutes(apiV1, s.db, s.cfg)
+	category.RegisterRoutes(apiV1, s.db, s.cfg)
+	history.RegisterRoutes(apiV1, s.db, s.cfg)
 	household.RegisterRoutes(apiV1, s.db, s.cfg)
 	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
 	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)

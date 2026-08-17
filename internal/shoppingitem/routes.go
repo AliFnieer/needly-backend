@@ -3,6 +3,7 @@ package shoppingitem
 import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"gorm.io/gorm"
@@ -26,18 +27,20 @@ type Service struct {
 
 // CreateRequest is the payload for creating a shopping item.
 type CreateRequest struct {
-	Name        string `json:"name" binding:"required,min=1,max=200"`
-	Quantity    int    `json:"quantity" binding:"omitempty,min=1,max=10000"`
-	Unit        string `json:"unit" binding:"omitempty,max=50"`
-	IsCompleted bool   `json:"is_completed"`
+	Name        string  `json:"name" binding:"required,min=1,max=200"`
+	Quantity    float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
+	Unit        string  `json:"unit" binding:"omitempty,min=1,max=50"`
+	CategoryID  *uint   `json:"category_id" binding:"omitempty"`
+	IsCompleted bool    `json:"is_completed"`
 }
 
 // UpdateRequest is the payload for updating a shopping item.
 type UpdateRequest struct {
-	Name        string `json:"name" binding:"omitempty,min=1,max=200"`
-	Quantity    *int   `json:"quantity" binding:"omitempty,min=1,max=10000"`
-	Unit        string `json:"unit" binding:"omitempty,max=50"`
-	IsCompleted *bool  `json:"is_completed"`
+	Name        string   `json:"name" binding:"omitempty,min=1,max=200"`
+	Quantity    *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
+	Unit        string   `json:"unit" binding:"omitempty,min=1,max=50"`
+	CategoryID  *uint    `json:"category_id" binding:"omitempty"`
+	IsCompleted *bool    `json:"is_completed"`
 }
 
 // NewService creates a new shopping item service.
@@ -51,15 +54,27 @@ func NewService(db *gorm.DB, cache *cache.Cache) *Service {
 // Create adds a new item to a shopping list.
 func (s *Service) Create(listID, userID uint, req *CreateRequest) (*ShoppingItem, error) {
 	quantity := req.Quantity
-	if quantity == 0 {
+	if quantity <= 0 {
 		quantity = 1
+	}
+
+	if err := s.validateCategoryID(req.CategoryID); err != nil {
+		return nil, err
+	}
+
+	unit := strings.TrimSpace(req.Unit)
+
+	var categoryID *uint
+	if req.CategoryID != nil && *req.CategoryID != 0 {
+		categoryID = req.CategoryID
 	}
 
 	item := ShoppingItem{
 		ListID:      listID,
+		CategoryID:  categoryID,
 		Name:        req.Name,
 		Quantity:    quantity,
-		Unit:        req.Unit,
+		Unit:        unit,
 		IsCompleted: req.IsCompleted,
 		CreatedBy:   userID,
 	}
@@ -142,7 +157,7 @@ func (s *Service) ListByListID(listID uint) ([]ShoppingItem, error) {
 }
 
 // Update updates a shopping item.
-func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingItem, error) {
+func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, error) {
 	var item ShoppingItem
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -154,13 +169,30 @@ func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingItem, error) {
 	if req.Name != "" {
 		item.Name = req.Name
 	}
-	if req.Quantity != nil {
+	if req.Quantity != nil && *req.Quantity > 0 {
 		item.Quantity = *req.Quantity
 	}
 	if req.Unit != "" {
-		item.Unit = req.Unit
+		item.Unit = strings.TrimSpace(req.Unit)
+	}
+	if req.CategoryID != nil {
+		if err := s.validateCategoryID(req.CategoryID); err != nil {
+			return nil, err
+		}
+		// category_id of 0 clears the category assignment
+		if *req.CategoryID == 0 {
+			item.CategoryID = nil
+		} else {
+			item.CategoryID = req.CategoryID
+		}
 	}
 	if req.IsCompleted != nil {
+		// Record history when transitioning to completed
+		if *req.IsCompleted && !item.IsCompleted && s.history != nil {
+			if _, err := s.history.Record(item.ListID, item.ID, userID, item.Name, item.Quantity, item.Unit, item.CategoryID); err != nil {
+				return nil, fmt.Errorf("failed to record shopping history: %w", err)
+			}
+		}
 		item.IsCompleted = *req.IsCompleted
 	}
 
@@ -175,13 +207,20 @@ func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingItem, error) {
 }
 
 // UpdateCompleted updates just the completion status of a shopping item.
-func (s *Service) UpdateCompleted(id uint, isCompleted bool) (*ShoppingItem, error) {
+func (s *Service) UpdateCompleted(id, userID uint, isCompleted bool) (*ShoppingItem, error) {
 	var item ShoppingItem
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("shopping item not found")
 		}
 		return nil, fmt.Errorf("failed to get shopping item: %w", err)
+	}
+
+	// Record history when transitioning to completed
+	if isCompleted && !item.IsCompleted && s.history != nil {
+		if _, err := s.history.Record(item.ListID, item.ID, userID, item.Name, item.Quantity, item.Unit, item.CategoryID); err != nil {
+			return nil, fmt.Errorf("failed to record shopping history: %w", err)
+		}
 	}
 
 	item.IsCompleted = isCompleted
