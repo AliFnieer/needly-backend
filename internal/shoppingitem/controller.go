@@ -123,6 +123,11 @@ func (ctl *Controller) GetByID(c *gin.Context) {
 
 // Update handles PUT /api/v1/items/:id
 func (ctl *Controller) Update(c *gin.Context) {
+	userID, ok := getCurrentUserID(c)
+	if !ok {
+		return
+	}
+
 	id, ok := parseUintParam(c, "id")
 	if !ok {
 		return
@@ -136,7 +141,7 @@ func (ctl *Controller) Update(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.Update(id, &req)
+	item, err := ctl.service.Update(id, userID, &req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -149,6 +154,11 @@ func (ctl *Controller) Update(c *gin.Context) {
 
 // SetCompleted handles PATCH /api/v1/items/:id/completed
 func (ctl *Controller) SetCompleted(c *gin.Context) {
+	userID, ok := getCurrentUserID(c)
+	if !ok {
+		return
+	}
+
 	id, ok := parseUintParam(c, "id")
 	if !ok {
 		return
@@ -164,7 +174,7 @@ func (ctl *Controller) SetCompleted(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.UpdateCompleted(id, req.IsCompleted)
+	item, err := ctl.service.UpdateCompleted(id, userID, req.IsCompleted)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -190,4 +200,27 @@ func (ctl *Controller) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusNoContent, nil)
+}
+
+// ReAddFromHistory handles POST /api/v1/history/:id/re-add
+func (ctl *Controller) ReAddFromHistory(c *gin.Context) {
+	userID, ok := getCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	historyID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	item, err := ctl.service.ReAddFromHistory(historyID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, item)
 }

@@ -22,5 +22,10 @@ func main() {
 		log.Fatalf("failed to seed users: %v", err)
 	}
 
+	// Seed default categories
+	if err := database.SeedCategories(db, nil); err != nil {
+		log.Fatalf("failed to seed categories: %v", err)
+	}
+
 	log.Println("seeding complete")
 }

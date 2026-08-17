@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/AliFnieer/needly-backend/internal/auth"
+	"github.com/AliFnieer/needly-backend/internal/category"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -51,6 +52,54 @@ func DefaultSeedUsers() []SeedUser {
 			Password:  "password123",
 		},
 	}
+}
+
+// DefaultSeedCategories returns the default set of categories.
+func DefaultSeedCategories() []category.Category {
+	return []category.Category{
+		{Name: "Groceries"},
+		{Name: "Produce"},
+		{Name: "Dairy"},
+		{Name: "Meat & Seafood"},
+		{Name: "Bakery"},
+		{Name: "Frozen"},
+		{Name: "Beverages"},
+		{Name: "Snacks"},
+		{Name: "Household"},
+		{Name: "Personal Care"},
+		{Name: "Other"},
+	}
+}
+
+// SeedCategories inserts default categories into the database if they do not already exist.
+// It is idempotent: categories with an existing name are skipped.
+func SeedCategories(db *gorm.DB, categories []category.Category) error {
+	if len(categories) == 0 {
+		categories = DefaultSeedCategories()
+	}
+
+	created := 0
+	skipped := 0
+
+	for _, cat := range categories {
+		var existing category.Category
+		err := db.Where("name = ?", cat.Name).First(&existing).Error
+		if err == nil {
+			skipped++
+			continue
+		} else if err != gorm.ErrRecordNotFound {
+			return fmt.Errorf("failed to check existing category %s: %w", cat.Name, err)
+		}
+
+		if err := db.Create(&cat).Error; err != nil {
+			return fmt.Errorf("failed to create category %s: %w", cat.Name, err)
+		}
+
+		created++
+	}
+
+	log.Printf("seed categories complete: %d created, %d skipped", created, skipped)
+	return nil
 }
 
 // SeedUsers inserts demo users into the database if they do not already exist.
