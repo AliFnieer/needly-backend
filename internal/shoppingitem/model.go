@@ -12,7 +12,7 @@ type ShoppingItem struct {
 	ListID      uint              `gorm:"not null;index" json:"list_id"`
 	CategoryID  *uint             `gorm:"index" json:"category_id"`
 	Name        string            `gorm:"size:200;not null" json:"name"`
-	Quantity    int               `gorm:"not null;default:1" json:"quantity"`
+	Quantity    float64           `gorm:"not null;default:1" json:"quantity"`
 	Unit        string            `gorm:"size:50" json:"unit"`
 	IsCompleted bool              `gorm:"not null;default:false" json:"is_completed"`
 	CreatedBy   uint              `gorm:"not null" json:"created_by"`
