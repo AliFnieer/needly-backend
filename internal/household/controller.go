@@ -2,6 +2,7 @@ package household
 
 import (
 	"net/http"
+	"log"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -70,8 +71,9 @@ func (ctl *Controller) Create(c *gin.Context) {
 
 	household, err := ctl.service.Create(userID, &req)
 	if err != nil {
+		log.Printf("household create: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
@@ -106,8 +108,9 @@ func (ctl *Controller) List(c *gin.Context) {
 
 	households, err := ctl.service.ListByUser(userID)
 	if err != nil {
+		log.Printf("household list: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
