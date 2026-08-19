@@ -4,68 +4,127 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
+	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/gin-gonic/gin"
 	gorilla "github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
-var upgrader = gorilla.Upgrader{
-    ReadBufferSize:  1024,
-    WriteBufferSize: 1024,
-    CheckOrigin: func(r *http.Request) bool {
-        return true
-    },
+// ServeWS upgrades the connection, registers the client, and starts pumps.
+// The user must already be authenticated (auth middleware runs before this).
+// If a household_id is provided, membership is verified.
+func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
+	conn, err := upgradeWithOriginCheck(c, cfg)
+	if err != nil {
+		log.Printf("websocket upgrade error: %v", err)
+		return
+	}
+
+	// Get authenticated user ID from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		conn.WriteMessage(gorilla.CloseMessage,
+			gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "unauthenticated"))
+		conn.Close()
+		return
+	}
+
+	uid, ok := userID.(float64)
+	if !ok {
+		conn.WriteMessage(gorilla.CloseMessage,
+			gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "invalid user id"))
+		conn.Close()
+		return
+	}
+
+	// Parse household id from path param and verify membership
+	hidStr := c.Param("household_id")
+	var hid uint
+	if hidStr != "" {
+		v, err := strconv.ParseUint(hidStr, 10, 64)
+		if err != nil {
+			conn.WriteMessage(gorilla.CloseMessage,
+				gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "invalid household_id"))
+			conn.Close()
+			return
+		}
+		hid = uint(v)
+
+		// Verify the user is a member of this household
+		if err := verifyHouseholdMembership(db, hid, uint(uid)); err != nil {
+			conn.WriteMessage(gorilla.CloseMessage,
+				gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "not a household member"))
+			conn.Close()
+			return
+		}
+	}
+
+	// Auto-generate client ID from user + household (no spoofable query param)
+	clientID := strconv.FormatUint(uint64(uid), 10) + ":" + strconv.FormatUint(uint64(hid), 10)
+
+	client := &Client{
+		ID:          clientID,
+		HouseholdID: hid,
+		UserID:      uint(uid),
+		Send:        make(chan []byte, 256),
+	}
+
+	h.Register(client)
+
+	// Start write pump
+	go func() {
+		for msg := range client.Send {
+			if err := conn.WriteMessage(gorilla.TextMessage, msg); err != nil {
+				break
+			}
+		}
+		conn.Close()
+	}()
+
+	// Read loop: drain until error, then unregister
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+	}
+
+	h.Unregister(client)
+	conn.Close()
 }
 
-// ServeWS upgrades the connection, registers the client, and starts pumps.
-func ServeWS(h *Hub, c *gin.Context) {
-    conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-    if err != nil {
-        log.Printf("websocket upgrade error: %v", err)
-        return
-    }
+// upgradeWithOriginCheck performs the WebSocket upgrade with origin validation.
+func upgradeWithOriginCheck(c *gin.Context, cfg *config.Config) (*gorilla.Conn, error) {
+	allowedOrigins := cfg.CORS.AllowedOrigins
 
-    // Parse household id from path param
-    hidStr := c.Param("household_id")
-    var hid uint
-    if hidStr != "" {
-        if v, err := strconv.ParseUint(hidStr, 10, 64); err == nil {
-            hid = uint(v)
-        }
-    }
+	upgrader := gorilla.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true // non-browser clients
+			}
+			// If no origins configured, allow all (same as CORS middleware)
+			if len(allowedOrigins) == 0 {
+				return true
+			}
+			for _, ao := range allowedOrigins {
+				if ao == "*" || ao == origin {
+					return true
+				}
+			}
+			return false
+		},
+	}
 
-    // Client ID may be provided as query param `id`, otherwise generate one.
-    clientID := c.Query("id")
-    if clientID == "" {
-        clientID = strconv.FormatInt(time.Now().UnixNano(), 10)
-    }
+	return upgrader.Upgrade(c.Writer, c.Request, nil)
+}
 
-    client := &Client{
-        ID:          clientID,
-        HouseholdID: hid,
-        Send:        make(chan []byte, 256),
-    }
-
-    h.Register(client)
-
-    // Start write pump
-    go func() {
-        for msg := range client.Send {
-            if err := conn.WriteMessage(gorilla.TextMessage, msg); err != nil {
-                break
-            }
-        }
-        conn.Close()
-    }()
-
-    // Read loop: drain until error, then unregister
-    for {
-        if _, _, err := conn.ReadMessage(); err != nil {
-            break
-        }
-    }
-
-    h.Unregister(client)
-    conn.Close()
+// verifyHouseholdMembership checks that the user belongs to the household.
+func verifyHouseholdMembership(db *gorm.DB, householdID, userID uint) error {
+	var count int64
+	return db.Table("household_members").
+		Where("household_id = ? AND user_id = ?", householdID, userID).
+		Count(&count).Error
 }
