@@ -14,6 +14,7 @@ import (
 type Client struct {
 	ID          string
 	HouseholdID uint
+	UserID      uint
 	Send        chan []byte
 }
 

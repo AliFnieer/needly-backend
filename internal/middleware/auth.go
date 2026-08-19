@@ -9,6 +9,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	// IssuerNeedlyAPI is the expected JWT issuer for this service.
+	IssuerNeedlyAPI = "needly-api"
+)
+
 // AuthMiddleware validates the JWT token in the Authorization header.
 func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -53,6 +58,15 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 		if !ok || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid token claims",
+			})
+			c.Abort()
+			return
+		}
+
+		// Validate issuer claim
+		if issuer, _ := claims["iss"].(string); issuer != "" && issuer != cfg.JWT.Issuer {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid token issuer",
 			})
 			c.Abort()
 			return

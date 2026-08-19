@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/AliFnieer/needly-backend/internal/notification"
 	"gorm.io/gorm"
@@ -251,7 +252,7 @@ func (s *Service) notify(ctx context.Context, nt notification.NotificationType, 
 	}
 
 	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
-		fmt.Printf("household notification error: %v\n", err)
+		slog.Error("household notification error", "error", err)
 	}
 }
 

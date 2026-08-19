@@ -12,6 +12,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
+	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -57,9 +58,13 @@ func InitPostgres(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Auto-migrate models
-	if err := autoMigrate(db); err != nil {
-		return nil, fmt.Errorf("failed to run auto-migrations: %w", err)
+	// Auto-migrate models in development only — production uses migration CLI
+	if cfg.Server.GinMode == gin.ReleaseMode {
+		log.Println("production mode: skipping auto-migrations (use migrate CLI)")
+	} else {
+		if err := autoMigrate(db); err != nil {
+			return nil, fmt.Errorf("failed to run auto-migrations: %w", err)
+		}
 	}
 
 	log.Println("database connected successfully")
@@ -70,6 +75,7 @@ func InitPostgres(cfg *config.Config) (*gorm.DB, error) {
 func autoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&auth.User{},
+		&auth.RefreshToken{},
 		&household.Household{},
 		&household.HouseholdMember{},
 		&category.Category{},

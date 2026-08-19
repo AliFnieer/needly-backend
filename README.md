@@ -12,21 +12,21 @@ This repository contains the backend API, business logic, database layer, authen
 
 ## ✨ Features
 
-* 🔐 User registration and authentication
+* 🔐 User registration and authentication with refresh token rotation
 * 👥 Household management
 * 🛒 Shared shopping lists
 * 📝 Shopping item management
 * ⚡ Real-time synchronization via WebSockets
 * 📜 Shopping history
-* 🔄 Recurring shopping items
 * 🏷️ Categories, quantities, and units
-* 🔒 Authentication and authorization
+* 🔒 JWT authentication with refresh token rotation
 * 🗄️ PostgreSQL persistence with GORM
 * ⚡ Redis for caching and Pub/Sub
 * 🛡️ Redis-backed API rate limiting
 * 🔔 Push notifications for household changes
+* 🛡️ Security headers (HSTS, CSP, X-Frame-Options)
+* 📊 Structured logging, metrics, and tracing
 * 🐳 Docker-based development
-* 🧪 Automated tests
 * 🚀 CI/CD with GitHub Actions
 
 ---
@@ -67,17 +67,19 @@ The backend follows a feature-oriented architecture designed to keep business lo
 ```text
 User
  │
- │ member of
- ▼
-Household
+ │ member of                    belongs to
+ ▼                              │
+Household                       │
+ │                              │
+ │ owns                         │
+ ▼                              │
+Shopping List                   │
+ │                              │
+ │ contains                     │
+ ▼                              │
+Shopping Item ──> Shopping History
  │
- │ owns
- ▼
-Shopping List
- │
- │ contains
- ▼
-Shopping Item
+ └──> Category (optional)
 ```
 
 A shopping list belongs to a **household**, rather than an individual user. This allows multiple household members to interact with the same lists.
@@ -92,12 +94,13 @@ A shopping list belongs to a **household**, rather than an individual user. This
 | Gin            | HTTP framework                        |
 | GORM           | ORM and database access               |
 | PostgreSQL     | Primary database                      |
-| Redis          | Caching, Pub/Sub, and temporary state |
+| Redis          | Caching, Pub/Sub, rate limiting       |
 | WebSocket      | Real-time client communication        |
-| JWT            | Authentication                        |
-| golang-migrate | Database migrations                   |
+| JWT (HS256)    | Authentication with refresh tokens    |
+| bcrypt         | Password hashing                      |
+| slog (stdlib)  | Structured JSON logging               |
 | Docker         | Containerization                      |
-| GitHub Actions | CI/CD                                 |
+| GitHub Actions | CI/CD (lint, test, build, docker)     |
 
 ---
 
@@ -123,8 +126,14 @@ User
  │                           └──< ShoppingList
  │                                    │
  │                                    └──< ShoppingItem
+ │                                            │
+ │                                            └──< Category (optional)
  │
- └──< ItemHistory
+ ├──< RefreshToken
+ │
+ ├──< ShoppingHistory
+ │
+ └──< Notification
 ```
 
 The database remains the **source of truth** for persistent application data.
@@ -182,16 +191,11 @@ This enables horizontally scaling the WebSocket infrastructure across multiple A
 
 ### Temporary data
 
-Redis may also be used for short-lived data such as:
+Redis is currently used for:
 
-* Rate limiting
-* Push notification history
-* Invitation tokens
-* Temporary synchronization state
-* WebSocket connection metadata
-* Short-lived caches
-
-Redis responsibilities will evolve as the application grows.
+* Rate limiting (fixed-window counters)
+* Push notification history (sorted sets per household)
+* WebSocket Pub/Sub distribution across API instances
 
 ---
 
@@ -200,7 +204,9 @@ Redis responsibilities will evolve as the application grows.
 ```text
 .
 ├── cmd/
-│   └── server/
+│   ├── api/
+│   │   └── main.go
+│   └── seed/
 │       └── main.go
 │
 ├── internal/
@@ -208,21 +214,20 @@ Redis responsibilities will evolve as the application grows.
 │   ├── household/
 │   ├── shoppinglist/
 │   ├── shoppingitem/
-│   ├── recurring/
+│   ├── category/
 │   ├── history/
+│   ├── notification/
 │   ├── websocket/
 │   ├── cache/
-│   │
+│   ├── config/
 │   ├── database/
-│   │   ├── models/
-│   │   ├── postgres.go
-│   │   └── repositories/
-│   │
+│   ├── docs/
 │   ├── middleware/
+│   ├── observability/
 │   └── server/
 │
 ├── migrations/
-├── tests/
+├── .github/workflows/
 │
 ├── Dockerfile
 ├── docker-compose.yml
@@ -253,26 +258,36 @@ cd needly-backend
 
 ### Environment Variables
 
-Create a `.env` file:
+Create a `.env` file (see `.env.example` for all options):
 
 ```env
-APP_ENV=development
 PORT=8080
+GIN_MODE=debug
 
-DATABASE_URL=postgres://needly:needly@localhost:5432/needly
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=needly
+DB_SSLMODE=disable
+DB_TIMEZONE=Africa/Tripoli
 
-REDIS_URL=redis://localhost:6379
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
 
-JWT_SECRET=change-me
-JWT_ACCESS_TOKEN_TTL=15m
-JWT_REFRESH_TOKEN_TTL=720h
+JWT_SECRET=your_super_secret_jwt_key_change_me
+JWT_EXPIRATION_HOURS=1
+JWT_REFRESH_TOKEN_TTL_HOURS=720
+JWT_ISSUER=needly-api
 
-# Rate limiting (Redis-backed fixed-window)
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW_SECONDS=60
 
-# Push notifications (WebSocket delivery + Redis history)
 NOTIFICATIONS_ENABLED=true
 NOTIFICATIONS_WEBSOCKET_ENABLED=true
 NOTIFICATIONS_HISTORY_LIMIT=50
@@ -295,14 +310,22 @@ Redis
 
 ### Run Migrations
 
+The server auto-migrates on startup. For manual migrations, use the [migrate](https://github.com/golang-migrate/migrate) CLI:
+
 ```bash
-make migrate-up
+migrate -path migrations -database "postgres://postgres:postgres@localhost:5432/needly?sslmode=disable" up
+```
+
+### Seed the Database
+
+```bash
+make seed
 ```
 
 ### Start the Server
 
 ```bash
-go run ./cmd/server
+make run
 ```
 
 The API will be available at:
@@ -315,99 +338,110 @@ http://localhost:8080
 
 ## 🔌 API
 
-The API is versioned under:
+The API is versioned under `/api/v1`. Full interactive documentation is available at `/docs` (Swagger UI).
 
-```text
-/api/v1
-```
+All endpoints except auth endpoints require a valid JWT in the `Authorization: Bearer <token>` header.
 
 ### Authentication
 
 ```text
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/auth/refresh
-POST /api/v1/auth/logout
+POST /api/v1/auth/register          # Create account (returns access + refresh tokens)
+POST /api/v1/auth/login             # Log in (returns access + refresh tokens)
+POST /api/v1/auth/refresh           # Exchange refresh token for new token pair
+GET  /api/v1/auth/me                # Get current user profile
+POST /api/v1/auth/logout            # Revoke refresh token(s)
 ```
 
-### Household
+### Households
 
 ```text
-GET  /api/v1/household
-POST /api/v1/household/invitations
-GET  /api/v1/household/members
+GET    /api/v1/households                        # List user's households
+POST   /api/v1/households                        # Create a household
+GET    /api/v1/households/:id                    # Get household details
+PUT    /api/v1/households/:id                    # Update household (owner only)
+DELETE /api/v1/households/:id                    # Delete household (owner only)
+POST   /api/v1/households/:id/members            # Add member (owner only)
+DELETE /api/v1/households/:id/members/:userId    # Remove member (owner only)
 ```
 
 ### Shopping Lists
 
 ```text
-GET    /api/v1/lists
-POST   /api/v1/lists
-GET    /api/v1/lists/:id
-PATCH  /api/v1/lists/:id
-DELETE /api/v1/lists/:id
-```
-
-### Categories
-
-```text
-GET    /api/v1/categories
-POST   /api/v1/categories
-GET    /api/v1/categories/:id
-PUT    /api/v1/categories/:id
-DELETE /api/v1/categories/:id
+GET    /api/v1/households/:id/lists              # List lists for a household
+POST   /api/v1/households/:id/lists              # Create a list in a household
+GET    /api/v1/lists/:id                         # Get list by ID (includes items)
+PUT    /api/v1/lists/:id                         # Update list name
+DELETE /api/v1/lists/:id                         # Delete list and its items
 ```
 
 ### Shopping Items
 
 ```text
-GET    /api/v1/lists/:id/items
-POST   /api/v1/lists/:id/items
-GET    /api/v1/items/:id
-PATCH  /api/v1/items/:id
-PUT    /api/v1/items/:id
-DELETE /api/v1/items/:id
+GET    /api/v1/lists/:id/items                   # List items in a shopping list
+POST   /api/v1/lists/:id/items                   # Add an item to a list
+GET    /api/v1/items/:id                         # Get item by ID
+PUT    /api/v1/items/:id                         # Update an item
+PATCH  /api/v1/items/:id/completed               # Set completion status
+DELETE /api/v1/items/:id                         # Delete an item
+POST   /api/v1/history/:id/re-add                # Re-add item from history
 ```
 
-Shopping items support an optional `category_id`, decimal `quantity`, and `unit`:
+### Categories
 
-```json
-{
-  "name": "Milk",
-  "quantity": 1.5,
-  "unit": "liters",
-  "category_id": 3
-}
+```text
+GET    /api/v1/categories                        # List all categories
+POST   /api/v1/categories                        # Create a category
+GET    /api/v1/categories/:id                    # Get category by ID
+PUT    /api/v1/categories/:id                    # Update a category
+DELETE /api/v1/categories/:id                    # Delete a category
 ```
-
-Quantity supports decimal values (e.g. `0.5`, `1.5`) and is validated between `0.001` and `1,000,000`. Unit is optional, trimmed, and max 50 characters.
 
 ### Shopping History
 
 ```text
-GET    /api/v1/lists/:id/history
-GET    /api/v1/households/:id/history
-GET    /api/v1/history/:id
-DELETE /api/v1/history/:id
+GET    /api/v1/lists/:id/history                 # History for a specific list
+GET    /api/v1/households/:id/history            # History for an entire household
+GET    /api/v1/history/:id                       # Get a history entry
+DELETE /api/v1/history/:id                       # Delete a history entry
 ```
 
-Completed shopping items are automatically recorded in shopping history with a snapshot of the item (name, quantity, unit, category), who completed it, and when. History entries are preserved even if the original item is later deleted or the list is removed.
+Completed items are automatically recorded in history with a snapshot of the item data, who completed it, and when. History entries are preserved even if the original item is deleted.
+
+### Notifications
+
+```text
+GET    /api/v1/households/:id/notifications      # Recent notifications for a household
+```
 
 ### Real-Time
 
 ```text
-GET /api/v1/ws
+GET    /api/v1/ws/:household_id                  # WebSocket connection (requires auth + membership)
 ```
 
-WebSocket events notify connected household members when shared data changes.
-
-Example event:
+Events are pushed to connected clients when shared data changes:
 
 ```json
 {
   "type": "item.updated",
-  "item_id": "item-123"
+  "household_id": 1,
+  "list_id": 5,
+  "item_id": 12,
+  "actor_id": 3,
+  "title": "Shopping item updated",
+  "body": "Item \"Milk\" was updated",
+  "created_at": "2026-08-19T12:00:00Z"
 }
+```
+
+### Observability
+
+```text
+GET    /health                                   # Health check (always public)
+GET    /metrics                                  # Prometheus-format metrics (auth required in production)
+GET    /debug/traces                             # Tracing summary (auth required in production)
+GET    /docs                                     # Swagger UI
+GET    /docs/openapi.json                        # OpenAPI 3.0.3 spec
 ```
 
 ---
@@ -417,25 +451,100 @@ Example event:
 Run the test suite:
 
 ```bash
-go test ./...
+make test
 ```
 
-Run tests with the race detector:
+Run tests with coverage:
 
 ```bash
-go test -race ./...
+make test-cover
 ```
 
-The project aims to maintain strong test coverage around:
+---
 
-* Business logic
-* API behavior
-* Authentication
-* Database operations
-* Redis functionality
-* WebSocket communication
-* Authorization
-* Error handling
+## 🔒 Security
+
+### Authentication
+
+* **JWT access tokens** — Short-lived (configurable, default 1 hour), used for API requests
+* **Refresh tokens** — Long-lived (default 30 days), stored as SHA-256 hashes in the database
+* **Token rotation** — Each refresh use issues a new token pair and revokes the old one
+* **Reuse detection** — If a revoked refresh token is presented, all tokens in its family are revoked
+* **Logout** — Revokes specific or all refresh tokens for the user
+
+### Password Security
+
+* Passwords hashed with **bcrypt** (cost factor 10)
+* Password hash never serialized in API responses (`json:"-"`)
+* Generic error messages prevent user enumeration on login
+
+### Rate Limiting
+
+* Redis-backed fixed-window rate limiter applied globally
+* Per-user limits for authenticated requests, per-IP for unauthenticated
+* Configurable via environment variables
+* Fails open when Redis is unavailable
+
+### Security Headers
+
+Every response includes:
+
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 0
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src ...
+Strict-Transport-Security: max-age=63072000; includeSubDomains (production only)
+```
+
+### WebSocket Security
+
+* Requires JWT authentication
+* Verifies household membership before allowing connection
+* Origin validation against configured CORS origins
+
+### Input Validation
+
+* All request payloads validated via Gin's struct tag bindings
+* Email format, password length, name lengths, quantity ranges enforced
+* GORM parameterized queries prevent SQL injection
+
+---
+
+## 📊 Observability
+
+### Structured Logging
+
+All requests are logged in JSON format via Go's `log/slog`:
+
+```json
+{"method":"GET","path":"/api/v1/households","status":200,"duration_ms":12,"client_ip":"127.0.0.1","user_id":1,"request_id":"a1b2c3d4-..."}
+```
+
+Log level is based on HTTP status: `error` for 5xx, `warn` for 4xx, `info` for success.
+
+### Metrics
+
+In-memory metrics exported in Prometheus text format at `/metrics`:
+
+* HTTP request count, duration, and active connections (per method/path)
+* Database query count, duration, and errors
+* Cache hit/miss ratio
+* WebSocket connections and messages
+* Business metrics (users, lists, items)
+
+### Tracing
+
+Lightweight in-memory tracing with request-scoped spans at `/debug/traces`:
+
+* Each request creates a span tracking method, path, duration, and status
+* Spans are correlated via the request ID
+
+### Request ID
+
+Every request receives a unique ID (UUIDv4), propagated via the `X-Request-ID` header. Incoming request IDs are honored for distributed tracing.
 
 ---
 
@@ -506,25 +615,25 @@ User B can see the change immediately without refreshing the application.
 
 ### v0.1 — MVP
 
-* [ ] User registration
-* [ ] Login/logout
-* [ ] Household creation
-* [ ] Household invitations
-* [ ] Shopping lists
-* [ ] Shopping items
-* [ ] Item completion
-* [ ] Basic WebSocket synchronization
-* [ ] PostgreSQL + GORM
-* [ ] Redis integration
+* [x] User registration
+* [x] Login/logout
+* [x] Household creation
+* [x] Household invitations
+* [x] Shopping lists
+* [x] Shopping items
+* [x] Item completion
+* [x] Basic WebSocket synchronization
+* [x] PostgreSQL + GORM
+* [x] Redis integration
 
 ### v0.2
 
-* [ ] Categories
-* [ ] Quantity and units
-* [ ] Shopping history
-* [ ] Re-add previous items
-* [ ] Redis caching
-* [ ] Improved validation
+* [x] Categories
+* [x] Quantity and units
+* [x] Shopping history
+* [x] Re-add previous items
+* [x] Redis caching
+* [x] Improved validation
 
 ### v0.3
 
@@ -537,12 +646,12 @@ User B can see the change immediately without refreshing the application.
 
 ### v1.0
 
-* [ ] Production deployment
-* [ ] CI/CD
-* [ ] Security review
+* [x] Production deployment
+* [x] CI/CD
+* [x] Security review
 * [ ] Performance testing
-* [ ] API documentation
-* [ ] Observability and monitoring
+* [x] API documentation
+* [x] Observability and monitoring
 
 ---
 

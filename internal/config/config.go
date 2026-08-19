@@ -43,8 +43,10 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	Secret          string
-	ExpirationHours int
+	Secret              string
+	ExpirationHours     int
+	RefreshTokenTTLHours int
+	Issuer              string
 }
 
 type CORSConfig struct {
@@ -64,6 +66,11 @@ type NotificationConfig struct {
 	WebSocketEnabled bool
 	HistoryLimit     int
 }
+
+const (
+	// defaultJWTSecret is the placeholder secret that must not be used in production.
+	defaultJWTSecret = "your_super_secret_jwt_key_change_me"
+)
 
 // Load reads configuration from .env file and environment variables.
 func Load() *Config {
@@ -91,8 +98,10 @@ func Load() *Config {
 			DB:       getEnvAsInt("REDIS_DB", 0),
 		},
 		JWT: JWTConfig{
-			Secret:          getEnv("JWT_SECRET", "your_super_secret_jwt_key_change_me"),
-			ExpirationHours: getEnvAsInt("JWT_EXPIRATION_HOURS", 24),
+			Secret:              getEnv("JWT_SECRET", "your_super_secret_jwt_key_change_me"),
+			ExpirationHours:     getEnvAsInt("JWT_EXPIRATION_HOURS", 1),
+			RefreshTokenTTLHours: getEnvAsInt("JWT_REFRESH_TOKEN_TTL_HOURS", 720),
+			Issuer:              getEnv("JWT_ISSUER", "needly-api"),
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
@@ -107,6 +116,13 @@ func Load() *Config {
 			WebSocketEnabled: getEnvAsBool("NOTIFICATIONS_WEBSOCKET_ENABLED", true),
 			HistoryLimit:     getEnvAsInt("NOTIFICATIONS_HISTORY_LIMIT", 50),
 		},
+	}
+
+	// Validate critical secrets in production
+	if cfg.Server.GinMode == "release" {
+		if cfg.JWT.Secret == defaultJWTSecret {
+			log.Fatal("FATAL: JWT_SECRET is using the default value. Set a strong random secret in production.")
+		}
 	}
 
 	log.Printf("config loaded: server port=%s, db host=%s, redis host=%s, rate limit enabled=%v",
