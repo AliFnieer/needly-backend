@@ -10,6 +10,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
+	"github.com/AliFnieer/needly-backend/internal/notification"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
 	"github.com/AliFnieer/needly-backend/internal/websocket"
@@ -31,6 +32,9 @@ type Server struct {
 	redis  *redis.Client
 	cache  *cache.Cache
 	hub    *websocket.Hub
+
+	rateLimiter    *middleware.RateLimiter
+	notificationSvc *notification.Service
 }
 
 // NewServer creates a new Gin server with all routes registered.
@@ -52,6 +56,12 @@ func NewServer(cfg *config.Config, db *gorm.DB, redisClient *redis.Client) *Serv
 	srv.hub = websocket.NewHub(redisClient)
 	go srv.hub.Run()
 
+	// Create the rate limiter backed by Redis
+	srv.rateLimiter = middleware.NewRateLimiter(redisClient, &cfg.RateLimit)
+
+	// Create the push notification service backed by the WebSocket hub and Redis
+	srv.notificationSvc = notification.NewService(srv.hub, redisClient, &cfg.Notification)
+
 	// Global middleware
 	srv.setupMiddleware()
 
@@ -68,6 +78,9 @@ func (s *Server) setupMiddleware() {
 
 	// CORS middleware
 	s.engine.Use(s.corsMiddleware())
+
+	// Redis-backed rate limiting applied to all requests
+	s.engine.Use(s.rateLimiter.Middleware())
 }
 
 // setupRoutes registers all API route groups.
@@ -86,9 +99,10 @@ func (s *Server) setupRoutes() {
 	auth.RegisterRoutes(apiV1, s.db, s.cfg)
 	category.RegisterRoutes(apiV1, s.db, s.cfg)
 	history.RegisterRoutes(apiV1, s.db, s.cfg)
-	household.RegisterRoutes(apiV1, s.db, s.cfg)
-	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
-	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
+	household.RegisterRoutes(apiV1, s.db, s.cfg, s.notificationSvc)
+	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
+	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
+	notification.RegisterRoutes(apiV1, s.notificationSvc, s.cfg)
 
 	// Register websocket routes
 	websocket.RegisterRoutes(apiV1, s.hub)
