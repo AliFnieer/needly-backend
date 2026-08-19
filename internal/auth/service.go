@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/config"
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -31,10 +30,23 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// RefreshRequest is the payload for token refresh.
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// LogoutRequest is the payload for logout.
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // AuthResponse is returned on successful registration/login.
 type AuthResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	User         User   `json:"user"`
 }
 
 // NewService creates a new auth service.
@@ -45,7 +57,7 @@ func NewService(db *gorm.DB, cfg *config.Config) *Service {
 	}
 }
 
-// Register creates a new user account and returns a JWT token.
+// Register creates a new user account and returns token pair.
 func (s *Service) Register(req *RegisterRequest) (*AuthResponse, error) {
 	// Check if email is already registered
 	var existing User
@@ -73,19 +85,11 @@ func (s *Service) Register(req *RegisterRequest) (*AuthResponse, error) {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Generate JWT token
-	token, err := s.generateToken(&user)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	return &AuthResponse{
-		Token: token,
-		User:  user,
-	}, nil
+	// Issue token pair
+	return s.issueTokenPair(&user)
 }
 
-// Login authenticates a user and returns a JWT token.
+// Login authenticates a user and returns token pair.
 func (s *Service) Login(req *LoginRequest) (*AuthResponse, error) {
 	var user User
 	if err := s.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
@@ -100,16 +104,64 @@ func (s *Service) Login(req *LoginRequest) (*AuthResponse, error) {
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Generate JWT token
-	token, err := s.generateToken(&user)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
+	// Issue token pair
+	return s.issueTokenPair(&user)
+}
+
+// Refresh validates a refresh token and returns a new token pair.
+// If the refresh token has been revoked (potential theft), all tokens in its family are revoked.
+func (s *Service) Refresh(req *RefreshRequest) (*AuthResponse, error) {
+	tokenHash := hashToken(req.RefreshToken)
+
+	var stored RefreshToken
+	if err := s.db.Where("token_hash = ?", tokenHash).First(&stored).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("invalid refresh token")
+		}
+		return nil, fmt.Errorf("failed to look up refresh token: %w", err)
 	}
 
-	return &AuthResponse{
-		Token: token,
-		User:  user,
-	}, nil
+	// Token has been revoked — revoke entire family (reuse detection)
+	if stored.RevokedAt != nil {
+		s.revokeFamily(stored.FamilyID)
+		return nil, errors.New("refresh token has been revoked; all sessions in this family terminated")
+	}
+
+	// Token expired
+	if time.Now().After(stored.ExpiresAt) {
+		s.revokeFamily(stored.FamilyID)
+		return nil, errors.New("refresh token has expired")
+	}
+
+	// Revoke the current refresh token (rotation)
+	now := time.Now()
+	if err := s.db.Model(&RefreshToken{}).Where("id = ?", stored.ID).Update("revoked_at", now).Error; err != nil {
+		return nil, fmt.Errorf("failed to revoke old refresh token: %w", err)
+	}
+
+	// Look up the user
+	var user User
+	if err := s.db.First(&user, stored.UserID).Error; err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	// Issue a new token pair in the same family
+	return s.issueTokenPairInFamily(&user, stored.FamilyID)
+}
+
+// Logout revokes a specific refresh token, or all tokens for the user if none specified.
+func (s *Service) Logout(userID uint, req *LogoutRequest) error {
+	if req != nil && req.RefreshToken != "" {
+		tokenHash := hashToken(req.RefreshToken)
+		result := s.db.Where("user_id = ? AND token_hash = ?", userID, tokenHash).
+			Update("revoked_at", time.Now())
+		if result.Error != nil {
+			return fmt.Errorf("failed to revoke refresh token: %w", result.Error)
+		}
+		return nil
+	}
+	// Revoke all tokens for the user
+	return s.revokeAllForUser(userID)
 }
 
 // GetByID retrieves a user by their ID.
@@ -124,17 +176,58 @@ func (s *Service) GetByID(id interface{}) (*User, error) {
 	return &user, nil
 }
 
-// generateToken creates a signed JWT for the given user.
-func (s *Service) generateToken(user *User) (string, error) {
-	expiration := time.Duration(s.cfg.JWT.ExpirationHours) * time.Hour
+// issueTokenPair creates a new access + refresh token pair with a new family.
+func (s *Service) issueTokenPair(user *User) (*AuthResponse, error) {
+	familyID, err := generateRandomHex(16)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate family id: %w", err)
+	}
+	return s.issueTokenPairInFamily(user, familyID)
+}
 
-	claims := jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"exp":     time.Now().Add(expiration).Unix(),
-		"iat":     time.Now().Unix(),
+// issueTokenPairInFamily creates a new access + refresh token pair within an existing family.
+func (s *Service) issueTokenPairInFamily(user *User, familyID string) (*AuthResponse, error) {
+	accessToken, err := generateAccessToken(user, s.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.cfg.JWT.Secret))
+	refreshToken, err := generateRefreshToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	ttl := time.Duration(s.cfg.JWT.RefreshTokenTTLHours) * time.Hour
+	stored := RefreshToken{
+		UserID:    user.ID,
+		TokenHash: hashToken(refreshToken),
+		FamilyID:  familyID,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+
+	if err := s.db.Create(&stored).Error; err != nil {
+		return nil, fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	return &AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    s.cfg.JWT.ExpirationHours * 3600,
+		User:         *user,
+	}, nil
+}
+
+// revokeFamily revokes all refresh tokens in a given family.
+func (s *Service) revokeFamily(familyID string) {
+	s.db.Model(&RefreshToken{}).
+		Where("family_id = ? AND revoked_at IS NULL", familyID).
+		Update("revoked_at", time.Now())
+}
+
+// revokeAllForUser revokes all non-revoked refresh tokens for a user.
+func (s *Service) revokeAllForUser(userID uint) error {
+	return s.db.Model(&RefreshToken{}).
+		Where("user_id = ? AND revoked_at IS NULL", userID).
+		Update("revoked_at", time.Now()).Error
 }

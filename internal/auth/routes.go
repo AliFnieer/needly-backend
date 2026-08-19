@@ -17,6 +17,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	{
 		authGroup.POST("/register", controller.Register)
 		authGroup.POST("/login", controller.Login)
+		authGroup.POST("/refresh", controller.Refresh)
 	}
 
 	// Protected routes (require JWT)
@@ -24,5 +25,6 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	protected.Use(middleware.AuthMiddleware(cfg))
 	{
 		protected.GET("/auth/me", controller.Me)
+		protected.POST("/auth/logout", controller.Logout)
 	}
 }

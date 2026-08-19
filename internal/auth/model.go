@@ -19,3 +19,19 @@ type User struct {
 func (User) TableName() string {
 	return "users"
 }
+
+// RefreshToken represents a stored refresh token for session management.
+type RefreshToken struct {
+	ID        uint       `gorm:"primaryKey" json:"-"`
+	UserID    uint       `gorm:"not null;index" json:"-"`
+	TokenHash string     `gorm:"size:255;not null" json:"-"`
+	FamilyID  string     `gorm:"size:64;not null;index" json:"-"`
+	ExpiresAt time.Time  `gorm:"not null" json:"-"`
+	RevokedAt *time.Time `json:"-"`
+	CreatedAt time.Time  `json:"-"`
+}
+
+// TableName overrides the default table name for GORM.
+func (RefreshToken) TableName() string {
+	return "refresh_tokens"
+}
