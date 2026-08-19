@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/notification"
@@ -80,7 +81,7 @@ func (s *Service) GetByID(id uint) (*ShoppingList, error) {
 		hit, err := s.cache.Get(ctx, cacheKey, &list)
 		if err != nil {
 			// Log and fall through to DB on cache error
-			fmt.Printf("cache get error for %s: %v\n", cacheKey, err)
+			slog.Error("cache get error", "key", cacheKey, "error", err)
 		} else if hit {
 			return &list, nil
 		}
@@ -97,7 +98,7 @@ func (s *Service) GetByID(id uint) (*ShoppingList, error) {
 	// Populate cache
 	if s.cache != nil {
 		if err := s.cache.Set(ctx, cacheKey, &list); err != nil {
-			fmt.Printf("cache set error for %s: %v\n", cacheKey, err)
+			slog.Error("cache set error", "key", cacheKey, "error", err)
 		}
 	}
 
@@ -115,7 +116,7 @@ func (s *Service) ListByHouseholdID(householdID uint) ([]ShoppingList, error) {
 		hit, err := s.cache.Get(ctx, cacheKey, &lists)
 		if err != nil {
 			// Log and fall through to DB on cache error
-			fmt.Printf("cache get error for %s: %v\n", cacheKey, err)
+			slog.Error("cache get error", "key", cacheKey, "error", err)
 		} else if hit {
 			return lists, nil
 		}
@@ -129,7 +130,7 @@ func (s *Service) ListByHouseholdID(householdID uint) ([]ShoppingList, error) {
 	// Populate cache
 	if s.cache != nil {
 		if err := s.cache.Set(ctx, cacheKey, &lists); err != nil {
-			fmt.Printf("cache set error for %s: %v\n", cacheKey, err)
+			slog.Error("cache set error", "key", cacheKey, "error", err)
 		}
 	}
 
@@ -208,7 +209,7 @@ func (s *Service) notify(ctx context.Context, nt notification.NotificationType, 
 	}
 
 	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
-		fmt.Printf("shopping list notification error: %v\n", err)
+		slog.Error("shopping list notification error", "error", err)
 	}
 }
 
@@ -236,7 +237,7 @@ func (s *Service) invalidateList(listID, householdID uint) {
 
 	for _, key := range keys {
 		if err := s.cache.Delete(ctx, key); err != nil {
-			fmt.Printf("cache delete error for %s: %v\n", key, err)
+			slog.Error("cache delete error", "key", key, "error", err)
 		}
 	}
 }
@@ -250,6 +251,6 @@ func (s *Service) invalidateHouseholdLists(householdID uint) {
 	ctx := context.Background()
 	key := householdListsCacheKey(householdID)
 	if err := s.cache.Delete(ctx, key); err != nil {
-		fmt.Printf("cache delete error for %s: %v\n", key, err)
+		slog.Error("cache delete error", "key", key, "error", err)
 	}
 }
