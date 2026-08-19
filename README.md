@@ -160,7 +160,7 @@ Needly API
 
 ### Pub/Sub
 
-Redis Pub/Sub can distribute events between multiple backend instances.
+Redis Pub/Sub distributes WebSocket events between multiple backend instances.
 
 ```text
                  ┌─────────────────┐
@@ -174,7 +174,9 @@ Redis Pub/Sub can distribute events between multiple backend instances.
              1             2             3
 ```
 
-This provides a path toward horizontally scaling the WebSocket infrastructure.
+When an API instance broadcasts a WebSocket event (e.g. a household broadcast or a client-targeted message), it publishes the event to the `ws:events` Redis channel. Every API instance subscribes to this channel and delivers the event to its locally connected WebSocket clients. Each instance tags its messages with a unique origin ID so it can ignore events it published itself, preventing double delivery.
+
+This enables horizontally scaling the WebSocket infrastructure across multiple API instances.
 
 ### Temporary data
 
@@ -516,8 +518,8 @@ User B can see the change immediately without refreshing the application.
 * [ ] Recurring items
 * [ ] Push notifications
 * [ ] Offline synchronization
-* [ ] Redis Pub/Sub
-* [ ] WebSocket horizontal scaling
+* [x] Redis Pub/Sub
+* [x] WebSocket horizontal scaling
 * [ ] Rate limiting
 
 ### v1.0
