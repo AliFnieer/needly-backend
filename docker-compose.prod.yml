@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: needly-api
+    environment:
+      GIN_MODE: release
+      DB_HOST: postgres
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - needly-network
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: needly-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: needly
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - needly-network
+    restart: unless-stopped
+    # No port mapping — only accessible within the Docker network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d needly"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  redis:
+    image: redis:7-alpine
+    container_name: needly-redis
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - needly-network
+    restart: unless-stopped
+    # No port mapping — only accessible within the Docker network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  needly-network:
+    driver: bridge
