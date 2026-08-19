@@ -23,6 +23,8 @@ This repository contains the backend API, business logic, database layer, authen
 * 🔒 Authentication and authorization
 * 🗄️ PostgreSQL persistence with GORM
 * ⚡ Redis for caching and Pub/Sub
+* 🛡️ Redis-backed API rate limiting
+* 🔔 Push notifications for household changes
 * 🐳 Docker-based development
 * 🧪 Automated tests
 * 🚀 CI/CD with GitHub Actions
@@ -183,6 +185,7 @@ This enables horizontally scaling the WebSocket infrastructure across multiple A
 Redis may also be used for short-lived data such as:
 
 * Rate limiting
+* Push notification history
 * Invitation tokens
 * Temporary synchronization state
 * WebSocket connection metadata
@@ -263,6 +266,16 @@ REDIS_URL=redis://localhost:6379
 JWT_SECRET=change-me
 JWT_ACCESS_TOKEN_TTL=15m
 JWT_REFRESH_TOKEN_TTL=720h
+
+# Rate limiting (Redis-backed fixed-window)
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW_SECONDS=60
+
+# Push notifications (WebSocket delivery + Redis history)
+NOTIFICATIONS_ENABLED=true
+NOTIFICATIONS_WEBSOCKET_ENABLED=true
+NOTIFICATIONS_HISTORY_LIMIT=50
 ```
 
 > Never commit real secrets to the repository.
@@ -516,11 +529,11 @@ User B can see the change immediately without refreshing the application.
 ### v0.3
 
 * [ ] Recurring items
-* [ ] Push notifications
+* [x] Push notifications
 * [ ] Offline synchronization
 * [x] Redis Pub/Sub
 * [x] WebSocket horizontal scaling
-* [ ] Rate limiting
+* [x] Rate limiting
 
 ### v1.0
 

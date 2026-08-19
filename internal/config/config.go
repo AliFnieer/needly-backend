@@ -11,11 +11,13 @@ import (
 
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
-	CORS     CORSConfig
+	Server       ServerConfig
+	Database     DatabaseConfig
+	Redis        RedisConfig
+	JWT          JWTConfig
+	CORS         CORSConfig
+	RateLimit    RateLimitConfig
+	Notification NotificationConfig
 }
 
 type ServerConfig struct {
@@ -41,12 +43,26 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	Secret            string
-	ExpirationHours   int
+	Secret          string
+	ExpirationHours int
 }
 
 type CORSConfig struct {
 	AllowedOrigins []string
+}
+
+// RateLimitConfig configures the Redis-backed API rate limiter.
+type RateLimitConfig struct {
+	Enabled       bool
+	Requests      int
+	WindowSeconds int
+}
+
+// NotificationConfig configures push notification delivery.
+type NotificationConfig struct {
+	Enabled          bool
+	WebSocketEnabled bool
+	HistoryLimit     int
 }
 
 // Load reads configuration from .env file and environment variables.
@@ -81,9 +97,20 @@ func Load() *Config {
 		CORS: CORSConfig{
 			AllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
 		},
+		RateLimit: RateLimitConfig{
+			Enabled:       getEnvAsBool("RATE_LIMIT_ENABLED", true),
+			Requests:      getEnvAsInt("RATE_LIMIT_REQUESTS", 100),
+			WindowSeconds: getEnvAsInt("RATE_LIMIT_WINDOW_SECONDS", 60),
+		},
+		Notification: NotificationConfig{
+			Enabled:          getEnvAsBool("NOTIFICATIONS_ENABLED", true),
+			WebSocketEnabled: getEnvAsBool("NOTIFICATIONS_WEBSOCKET_ENABLED", true),
+			HistoryLimit:     getEnvAsInt("NOTIFICATIONS_HISTORY_LIMIT", 50),
+		},
 	}
 
-	log.Printf("config loaded: server port=%s, db host=%s, redis host=%s", cfg.Server.Port, cfg.Database.Host, cfg.Redis.Host)
+	log.Printf("config loaded: server port=%s, db host=%s, redis host=%s, rate limit enabled=%v",
+		cfg.Server.Port, cfg.Database.Host, cfg.Redis.Host, cfg.RateLimit.Enabled)
 	return cfg
 }
 
@@ -102,6 +129,17 @@ func getEnvAsInt(key string, defaultValue int) int {
 			return intVal
 		}
 		log.Printf("invalid integer for %s, using default %d", key, defaultValue)
+	}
+	return defaultValue
+}
+
+// getEnvAsBool returns the environment variable as a boolean or a default.
+func getEnvAsBool(key string, defaultValue bool) bool {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return boolVal
+		}
+		log.Printf("invalid boolean for %s, using default %t", key, defaultValue)
 	}
 	return defaultValue
 }

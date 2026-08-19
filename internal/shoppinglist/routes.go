@@ -4,13 +4,14 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
+	"github.com/AliFnieer/needly-backend/internal/notification"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 // RegisterRoutes registers shopping list routes on the given router group.
-func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, cache *cache.Cache) {
-	service := NewService(db, cache)
+func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, cache *cache.Cache, notificationSvc *notification.Service) {
+	service := NewService(db, cache, notificationSvc)
 	controller := NewController(service)
 
 	// All shopping list routes require authentication

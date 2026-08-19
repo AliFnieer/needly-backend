@@ -9,6 +9,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/history"
+	"github.com/AliFnieer/needly-backend/internal/notification"
 	"gorm.io/gorm"
 )
 
@@ -23,9 +24,10 @@ const (
 
 // Service handles shopping item business logic.
 type Service struct {
-	db      *gorm.DB
-	cache   *cache.Cache
-	history *history.Service
+	db           *gorm.DB
+	cache        *cache.Cache
+	history      *history.Service
+	notification *notification.Service
 }
 
 // CreateRequest is the payload for creating a shopping item.
@@ -47,11 +49,12 @@ type UpdateRequest struct {
 }
 
 // NewService creates a new shopping item service.
-func NewService(db *gorm.DB, cache *cache.Cache, historySvc *history.Service) *Service {
+func NewService(db *gorm.DB, cache *cache.Cache, historySvc *history.Service, notificationSvc *notification.Service) *Service {
 	return &Service{
-		db:      db,
-		cache:   cache,
-		history: historySvc,
+		db:           db,
+		cache:        cache,
+		history:      historySvc,
+		notification: notificationSvc,
 	}
 }
 
@@ -105,6 +108,13 @@ func (s *Service) Create(listID, userID uint, req *CreateRequest) (*ShoppingItem
 
 	// Invalidate the list items cache since a new item was added
 	s.invalidateListItems(listID)
+
+	// Notify household members about the new item
+	householdID := s.householdIDForList(listID)
+	s.notify(context.Background(), notification.NotificationTypeItemCreated,
+		"New shopping item",
+		fmt.Sprintf("Item %q was added to the list", item.Name),
+		householdID, listID, item.ID, userID)
 
 	return &item, nil
 }
@@ -223,6 +233,13 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, er
 	// Invalidate caches for this item and its list
 	s.invalidateItem(item.ID, item.ListID)
 
+	// Notify household members about the updated item
+	householdID := s.householdIDForList(item.ListID)
+	s.notify(context.Background(), notification.NotificationTypeItemUpdated,
+		"Shopping item updated",
+		fmt.Sprintf("Item %q was updated", item.Name),
+		householdID, item.ListID, item.ID, userID)
+
 	return &item, nil
 }
 
@@ -251,6 +268,20 @@ func (s *Service) UpdateCompleted(id, userID uint, isCompleted bool) (*ShoppingI
 	// Invalidate caches for this item and its list
 	s.invalidateItem(item.ID, item.ListID)
 
+	// Notify household members about the completion status change
+	nt := notification.NotificationTypeItemUpdated
+	title := "Shopping item updated"
+	if isCompleted {
+		nt = notification.NotificationTypeItemCompleted
+		title = "Shopping item completed"
+	}
+
+	householdID := s.householdIDForList(item.ListID)
+	s.notify(context.Background(), nt,
+		title,
+		fmt.Sprintf("Item %q was %s", item.Name, map[bool]string{true: "completed", false: "re-opened"}[isCompleted]),
+		householdID, item.ListID, item.ID, userID)
+
 	return &item, nil
 }
 
@@ -274,6 +305,13 @@ func (s *Service) Delete(id uint) error {
 
 	// Invalidate caches for this item and its list
 	s.invalidateItem(item.ID, item.ListID)
+
+	// Notify household members about the deleted item
+	householdID := s.householdIDForList(item.ListID)
+	s.notify(context.Background(), notification.NotificationTypeItemDeleted,
+		"Shopping item deleted",
+		fmt.Sprintf("Item %q was deleted", item.Name),
+		householdID, item.ListID, item.ID, 0)
 
 	return nil
 }
@@ -303,7 +341,38 @@ func (s *Service) ReAddFromHistory(historyID, userID uint) (*ShoppingItem, error
 	}
 
 	s.invalidateListItems(item.ListID)
+
+	// Notify household members about the re-added item
+	householdID := s.householdIDForList(item.ListID)
+	s.notify(context.Background(), notification.NotificationTypeItemReAdded,
+		"Shopping item re-added",
+		fmt.Sprintf("Item %q was re-added to the list", item.Name),
+		householdID, item.ListID, item.ID, userID)
+
 	return &item, nil
+}
+
+// notify delivers a notification to all household members.
+func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint) {
+	if s.notification == nil {
+		return
+	}
+
+	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
+		fmt.Printf("shopping item notification error: %v\n", err)
+	}
+}
+
+// householdIDForList resolves the household ID for a given shopping list.
+func (s *Service) householdIDForList(listID uint) uint {
+	var list struct {
+		HouseholdID uint
+	}
+	if err := s.db.Table("shopping_lists").Select("household_id").Where("id = ?", listID).Scan(&list).Error; err != nil {
+		fmt.Printf("shopping item: failed to resolve household for list %d: %v\n", listID, err)
+		return 0
+	}
+	return list.HouseholdID
 }
 
 // itemCacheKey builds the cache key for a single shopping item.
