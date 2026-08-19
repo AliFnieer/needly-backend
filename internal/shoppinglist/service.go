@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/AliFnieer/needly-backend/internal/cache"
+	"github.com/AliFnieer/needly-backend/internal/notification"
 	"gorm.io/gorm"
 )
 
@@ -20,8 +21,9 @@ const (
 
 // Service handles shopping list business logic.
 type Service struct {
-	db    *gorm.DB
-	cache *cache.Cache
+	db           *gorm.DB
+	cache        *cache.Cache
+	notification *notification.Service
 }
 
 // CreateRequest is the payload for creating a shopping list.
@@ -35,10 +37,11 @@ type UpdateRequest struct {
 }
 
 // NewService creates a new shopping list service.
-func NewService(db *gorm.DB, cache *cache.Cache) *Service {
+func NewService(db *gorm.DB, cache *cache.Cache, notificationSvc *notification.Service) *Service {
 	return &Service{
-		db:    db,
-		cache: cache,
+		db:           db,
+		cache:        cache,
+		notification: notificationSvc,
 	}
 }
 
@@ -56,6 +59,12 @@ func (s *Service) Create(householdID, userID uint, req *CreateRequest) (*Shoppin
 
 	// Invalidate the household lists cache since a new list was added
 	s.invalidateHouseholdLists(householdID)
+
+	// Notify household members about the new list
+	s.notify(context.Background(), notification.NotificationTypeListCreated,
+		"New shopping list",
+		fmt.Sprintf("Shopping list %q was created", list.Name),
+		householdID, list.ID, 0, userID)
 
 	return &list, nil
 }
@@ -145,6 +154,12 @@ func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingList, error) {
 	// Invalidate caches for this list and its household
 	s.invalidateList(list.ID, list.HouseholdID)
 
+	// Notify household members about the updated list
+	s.notify(context.Background(), notification.NotificationTypeListUpdated,
+		"Shopping list updated",
+		fmt.Sprintf("Shopping list %q was updated", list.Name),
+		list.HouseholdID, list.ID, 0, 0)
+
 	return &list, nil
 }
 
@@ -177,7 +192,24 @@ func (s *Service) Delete(id uint) error {
 	// Invalidate caches for this list and its household
 	s.invalidateList(list.ID, list.HouseholdID)
 
+	// Notify household members about the deleted list
+	s.notify(context.Background(), notification.NotificationTypeListDeleted,
+		"Shopping list deleted",
+		fmt.Sprintf("Shopping list %q was deleted", list.Name),
+		list.HouseholdID, list.ID, 0, 0)
+
 	return nil
+}
+
+// notify delivers a notification to all household members.
+func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint) {
+	if s.notification == nil {
+		return
+	}
+
+	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
+		fmt.Printf("shopping list notification error: %v\n", err)
+	}
 }
 
 // listCacheKey builds the cache key for a single shopping list.

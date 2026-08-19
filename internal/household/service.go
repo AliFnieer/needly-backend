@@ -1,15 +1,18 @@
 package household
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	"github.com/AliFnieer/needly-backend/internal/notification"
 	"gorm.io/gorm"
 )
 
 // Service handles household business logic.
 type Service struct {
-	db *gorm.DB
+	db           *gorm.DB
+	notification *notification.Service
 }
 
 // CreateRequest is the payload for creating a household.
@@ -29,9 +32,10 @@ type AddMemberRequest struct {
 }
 
 // NewService creates a new household service.
-func NewService(db *gorm.DB) *Service {
+func NewService(db *gorm.DB, notificationSvc *notification.Service) *Service {
 	return &Service{
-		db: db,
+		db:           db,
+		notification: notificationSvc,
 	}
 }
 
@@ -64,6 +68,12 @@ func (s *Service) Create(ownerID uint, req *CreateRequest) (*Household, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create household: %w", err)
 	}
+
+	// Notify the household members about the new household
+	s.notify(context.Background(), notification.NotificationTypeHouseholdCreated,
+		"Household created",
+		fmt.Sprintf("Household %q was created", household.Name),
+		household.ID, 0, 0, ownerID)
 
 	return &household, nil
 }
@@ -118,6 +128,12 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*Household, error
 		return nil, fmt.Errorf("failed to update household: %w", err)
 	}
 
+	// Notify the household members about the update
+	s.notify(context.Background(), notification.NotificationTypeHouseholdUpdated,
+		"Household updated",
+		fmt.Sprintf("Household %q was updated", household.Name),
+		household.ID, 0, 0, userID)
+
 	return &household, nil
 }
 
@@ -151,6 +167,12 @@ func (s *Service) Delete(id, userID uint) error {
 		return fmt.Errorf("failed to delete household: %w", err)
 	}
 
+	// Notify members about the household deletion
+	s.notify(context.Background(), notification.NotificationTypeHouseholdDeleted,
+		"Household deleted",
+		fmt.Sprintf("Household %q was deleted", household.Name),
+		household.ID, 0, 0, userID)
+
 	return nil
 }
 
@@ -175,6 +197,17 @@ func (s *Service) AddMember(id, ownerID uint, req *AddMemberRequest) (*Household
 		return nil, fmt.Errorf("failed to add member: %w", err)
 	}
 
+	// Notify the household members about the added member
+	var household Household
+	if err := s.db.First(&household, id).Error; err != nil {
+		return nil, fmt.Errorf("failed to get household: %w", err)
+	}
+
+	s.notify(context.Background(), notification.NotificationTypeMemberAdded,
+		"New household member",
+		fmt.Sprintf("A new member was added to household %q", household.Name),
+		household.ID, 0, 0, ownerID)
+
 	return &member, nil
 }
 
@@ -197,7 +230,29 @@ func (s *Service) RemoveMember(id, ownerID, memberUserID uint) error {
 		return errors.New("member not found in household")
 	}
 
+	// Notify the household members about the removed member
+	var household Household
+	if err := s.db.First(&household, id).Error; err != nil {
+		return fmt.Errorf("failed to get household: %w", err)
+	}
+
+	s.notify(context.Background(), notification.NotificationTypeMemberRemoved,
+		"Household member removed",
+		fmt.Sprintf("A member was removed from household %q", household.Name),
+		household.ID, 0, 0, ownerID)
+
 	return nil
+}
+
+// notify delivers a notification to all household members.
+func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint) {
+	if s.notification == nil {
+		return
+	}
+
+	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
+		fmt.Printf("household notification error: %v\n", err)
+	}
 }
 
 // checkOwner verifies that the given user is the owner of the household.
