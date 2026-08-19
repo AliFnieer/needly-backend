@@ -1,16 +1,20 @@
 package websocket
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/middleware"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
 
-// RegisterRoutes registers websocket endpoints under the given router group.
-func RegisterRoutes(rg *gin.RouterGroup, hub *Hub) {
-    // WebSocket connection for a specific household
-    rg.GET("/ws/:household_id", func(c *gin.Context) {
-        ServeWS(hub, c)
-    })
-
-    // Generic ws without household id
-    rg.GET("/ws", func(c *gin.Context) {
-        ServeWS(hub, c)
-    })
+// RegisterRoutes registers authenticated websocket endpoints under the given router group.
+func RegisterRoutes(rg *gin.RouterGroup, hub *Hub, db *gorm.DB, cfg *config.Config) {
+	ws := rg.Group("/ws")
+	ws.Use(middleware.AuthMiddleware(cfg))
+	{
+		// WebSocket connection for a specific household (requires membership)
+		ws.GET("/:household_id", func(c *gin.Context) {
+			ServeWS(hub, c, db, cfg)
+		})
+	}
 }

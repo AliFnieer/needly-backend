@@ -1,6 +1,7 @@
 package category
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -74,8 +75,9 @@ func (ctl *Controller) GetByID(c *gin.Context) {
 func (ctl *Controller) List(c *gin.Context) {
 	categories, err := ctl.service.List()
 	if err != nil {
+		log.Printf("category list: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
