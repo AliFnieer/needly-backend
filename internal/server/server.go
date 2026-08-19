@@ -48,8 +48,8 @@ func NewServer(cfg *config.Config, db *gorm.DB, redisClient *redis.Client) *Serv
 		cache:  cache.NewCache(redisClient, defaultCacheTTL),
 	}
 
-	// Create and start websocket hub
-	srv.hub = websocket.NewHub()
+	// Create and start websocket hub with Redis Pub/Sub distribution
+	srv.hub = websocket.NewHub(redisClient)
 	go srv.hub.Run()
 
 	// Global middleware
