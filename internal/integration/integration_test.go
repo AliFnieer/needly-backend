@@ -344,8 +344,17 @@ func TestCategory_CRUD(t *testing.T) {
 	s := setupServer(t)
 	token, _ := registerAndGetTokens(t, s, "cat@test.com")
 
+	// Create a household first (categories are household-scoped)
+	w := s.doRequest("POST", "/api/v1/households", map[string]string{"name": "Cat HH"}, authHeaders(token))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create household: %d", w.Code)
+	}
+	hh := parseJSON(t, w)
+	hhID := fmt.Sprintf("%.0f", hh["id"].(float64))
+	catBase := fmt.Sprintf("/api/v1/households/%s/categories", hhID)
+
 	// Create
-	w := s.doRequest("POST", "/api/v1/categories", map[string]string{"name": "Fruits"}, authHeaders(token))
+	w = s.doRequest("POST", catBase, map[string]string{"name": "Fruits"}, authHeaders(token))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create failed: %d %s", w.Code, w.Body.String())
 	}
@@ -353,25 +362,25 @@ func TestCategory_CRUD(t *testing.T) {
 	id := fmt.Sprintf("%.0f", cat["id"].(float64))
 
 	// List
-	w2 := s.doRequest("GET", "/api/v1/categories", nil, authHeaders(token))
+	w2 := s.doRequest("GET", catBase, nil, authHeaders(token))
 	if w2.Code != http.StatusOK {
 		t.Fatalf("list failed: %d", w2.Code)
 	}
 
 	// Get
-	w3 := s.doRequest("GET", "/api/v1/categories/"+id, nil, authHeaders(token))
+	w3 := s.doRequest("GET", catBase+"/"+id, nil, authHeaders(token))
 	if w3.Code != http.StatusOK {
 		t.Fatalf("get failed: %d", w3.Code)
 	}
 
 	// Update
-	w4 := s.doRequest("PUT", "/api/v1/categories/"+id, map[string]string{"name": "Vegetables"}, authHeaders(token))
+	w4 := s.doRequest("PUT", catBase+"/"+id, map[string]string{"name": "Vegetables"}, authHeaders(token))
 	if w4.Code != http.StatusOK {
 		t.Fatalf("update failed: %d", w4.Code)
 	}
 
 	// Delete
-	w5 := s.doRequest("DELETE", "/api/v1/categories/"+id, nil, authHeaders(token))
+	w5 := s.doRequest("DELETE", catBase+"/"+id, nil, authHeaders(token))
 	if w5.Code != http.StatusNoContent {
 		t.Fatalf("delete failed: %d", w5.Code)
 	}
@@ -503,8 +512,8 @@ func TestFullLifecycle(t *testing.T) {
 	hh := parseJSON(t, w)
 	hhID := fmt.Sprintf("%.0f", hh["id"].(float64))
 
-	// 2. Create category
-	w = s.doRequest("POST", "/api/v1/categories", map[string]string{"name": "Dairy"}, authHeaders(token))
+	// 2. Create category (scoped to household)
+	w = s.doRequest("POST", fmt.Sprintf("/api/v1/households/%s/categories", hhID), map[string]string{"name": "Dairy"}, authHeaders(token))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create category: %d", w.Code)
 	}
@@ -568,8 +577,8 @@ func TestFullLifecycle(t *testing.T) {
 		t.Fatalf("expected 1 household, got %d", len(hhs))
 	}
 
-	// 10. Category list
-	w = s.doRequest("GET", "/api/v1/categories", nil, authHeaders(token))
+	// 10. Category list (scoped to household)
+	w = s.doRequest("GET", fmt.Sprintf("/api/v1/households/%s/categories", hhID), nil, authHeaders(token))
 	cats := parseJSONArray(t, w)
 	if len(cats) != 1 {
 		t.Fatalf("expected 1 category, got %d", len(cats))

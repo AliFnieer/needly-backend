@@ -189,7 +189,7 @@ func (s *Server) setupRoutes() {
 	household.RegisterRoutes(apiV1, s.db, s.cfg, s.notificationSvc)
 	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
 	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
-	notification.RegisterRoutes(apiV1, s.notificationSvc, s.cfg)
+	notification.RegisterRoutes(apiV1, s.notificationSvc, s.cfg, s.db)
 
 	// Register websocket routes
 	websocket.RegisterRoutes(apiV1, s.hub, s.db, s.cfg)

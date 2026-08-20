@@ -32,96 +32,115 @@ func parseIDParam(c *gin.Context, name string) (uint, bool) {
 	return uint(id), true
 }
 
-// Create handles POST /api/v1/categories
+// extractHouseholdID extracts the household ID from the URL path.
+func extractHouseholdID(c *gin.Context) (uint, bool) {
+	return parseIDParam(c, "id")
+}
+
+// Create handles POST /api/v1/households/:id/categories
 func (ctl *Controller) Create(c *gin.Context) {
-	var req CreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+	householdID, ok := extractHouseholdID(c)
+	if !ok {
 		return
 	}
 
-	category, err := ctl.service.Create(&req)
+	var req CreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	category, err := ctl.service.Create(householdID, &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusCreated, category)
 }
 
-// GetByID handles GET /api/v1/categories/:id
+// GetByID handles GET /api/v1/households/:hid/categories/:id
 func (ctl *Controller) GetByID(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	householdID, ok := extractHouseholdID(c)
 	if !ok {
 		return
 	}
 
-	category, err := ctl.service.GetByID(id)
+	id, err := strconv.ParseUint(c.Param("categoryId"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category id"})
+		return
+	}
+
+	category, err := ctl.service.GetByID(uint(id), householdID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, category)
 }
 
-// List handles GET /api/v1/categories
+// List handles GET /api/v1/households/:id/categories
 func (ctl *Controller) List(c *gin.Context) {
-	categories, err := ctl.service.List()
+	householdID, ok := extractHouseholdID(c)
+	if !ok {
+		return
+	}
+
+	categories, err := ctl.service.List(householdID)
 	if err != nil {
 		log.Printf("category list: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "internal server error",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	c.JSON(http.StatusOK, categories)
 }
 
-// Update handles PUT /api/v1/categories/:id
+// Update handles PUT /api/v1/households/:hid/categories/:categoryId
 func (ctl *Controller) Update(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	householdID, ok := extractHouseholdID(c)
 	if !ok {
+		return
+	}
+
+	catID, err := strconv.ParseUint(c.Param("categoryId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category id"})
 		return
 	}
 
 	var req UpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	category, err := ctl.service.Update(id, &req)
+	category, err := ctl.service.Update(uint(catID), householdID, &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, category)
 }
 
-// Delete handles DELETE /api/v1/categories/:id
+// Delete handles DELETE /api/v1/households/:hid/categories/:categoryId
 func (ctl *Controller) Delete(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	householdID, ok := extractHouseholdID(c)
 	if !ok {
 		return
 	}
 
-	if err := ctl.service.Delete(id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+	catID, err := strconv.ParseUint(c.Param("categoryId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category id"})
+		return
+	}
+
+	if err := ctl.service.Delete(uint(catID), householdID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

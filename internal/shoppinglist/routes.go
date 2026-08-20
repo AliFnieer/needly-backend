@@ -14,14 +14,24 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, ca
 	service := NewService(db, cache, notificationSvc)
 	controller := NewController(service)
 
-	// All shopping list routes require authentication
+	// All shopping list routes require authentication + household membership
 	listRoutes := router.Group("")
 	listRoutes.Use(middleware.AuthMiddleware(cfg))
 	{
-		listRoutes.POST("/households/:id/lists", controller.Create)
-		listRoutes.GET("/households/:id/lists", controller.List)
-		listRoutes.GET("/lists/:id", controller.GetByID)
-		listRoutes.PUT("/lists/:id", controller.Update)
-		listRoutes.DELETE("/lists/:id", controller.Delete)
+		listRoutes.POST("/households/:id/lists",
+			middleware.RequireMembership(db, middleware.HouseholdFromParam("id")),
+			controller.Create)
+		listRoutes.GET("/households/:id/lists",
+			middleware.RequireMembership(db, middleware.HouseholdFromParam("id")),
+			controller.List)
+		listRoutes.GET("/lists/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromList(db)),
+			controller.GetByID)
+		listRoutes.PUT("/lists/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromList(db)),
+			controller.Update)
+		listRoutes.DELETE("/lists/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromList(db)),
+			controller.Delete)
 	}
 }
