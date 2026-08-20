@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -138,12 +138,17 @@ func Load() *Config {
 	// Validate critical secrets in production
 	if cfg.Server.GinMode == "release" {
 		if cfg.JWT.Secret == defaultJWTSecret {
-			log.Fatal("FATAL: JWT_SECRET is using the default value. Set a strong random secret in production.")
+			slog.Error("FATAL: JWT_SECRET is using the default value. Set a strong random secret in production.")
+			os.Exit(1)
 		}
 	}
 
-	log.Printf("config loaded: server port=%s, db host=%s, redis host=%s, rate limit enabled=%v",
-		cfg.Server.Port, cfg.Database.Host, cfg.Redis.Host, cfg.RateLimit.Enabled)
+	slog.Info("config loaded",
+		"port", cfg.Server.Port,
+		"db_host", cfg.Database.Host,
+		"redis_host", cfg.Redis.Host,
+		"rate_limit_enabled", cfg.RateLimit.Enabled,
+	)
 	return cfg
 }
 
@@ -161,7 +166,7 @@ func getEnvAsInt(key string, defaultValue int) int {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
 		}
-		log.Printf("invalid integer for %s, using default %d", key, defaultValue)
+		slog.Warn("invalid integer for env var", "key", key, "default", defaultValue)
 	}
 	return defaultValue
 }
@@ -172,7 +177,7 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			return boolVal
 		}
-		log.Printf("invalid boolean for %s, using default %t", key, defaultValue)
+		slog.Warn("invalid boolean for env var", "key", key, "default", defaultValue)
 	}
 	return defaultValue
 }

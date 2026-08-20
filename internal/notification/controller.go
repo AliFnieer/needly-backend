@@ -2,7 +2,7 @@ package notification
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -30,7 +30,7 @@ func (ctl *Controller) ListHouseholdHistory(c *gin.Context) {
 
 	items, err := ctl.service.HistoryByHousehold(context.Background(), householdID)
 	if err != nil {
-		log.Printf("notification list: %v", err)
+		slog.Error("notification list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})

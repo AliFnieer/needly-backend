@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,12 +26,12 @@ func LoggerMiddleware() gin.HandlerFunc {
 		method := c.Request.Method
 		clientIP := c.ClientIP()
 
-		log.Printf("[%s] %s %s -> %d (%s)",
-			clientIP,
-			method,
-			path,
-			status,
-			latency,
+		slog.Info("http request",
+			"client_ip", clientIP,
+			"method", method,
+			"path", path,
+			"status", status,
+			"latency", latency,
 		)
 	}
 }

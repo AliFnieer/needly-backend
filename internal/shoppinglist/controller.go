@@ -1,7 +1,7 @@
 package shoppinglist
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -75,7 +75,7 @@ func (ctl *Controller) Create(c *gin.Context) {
 
 	list, err := ctl.service.Create(householdID, userID, &req)
 	if err != nil {
-		log.Printf("shopping list create: %v", err)
+		slog.Error("shopping list create failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})
@@ -94,7 +94,7 @@ func (ctl *Controller) List(c *gin.Context) {
 
 	lists, err := ctl.service.ListByHouseholdID(householdID)
 	if err != nil {
-		log.Printf("shopping list list: %v", err)
+		slog.Error("shopping list list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})

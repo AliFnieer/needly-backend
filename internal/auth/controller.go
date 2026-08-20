@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -36,7 +36,7 @@ func (c *Controller) Register(ctx *gin.Context) {
 		msg := err.Error()
 		// Keep business-level errors descriptive; hide internal errors
 		if msg != "email already registered" {
-			log.Printf("auth register: %v", err)
+			slog.Error("auth register failed", "error", err)
 			msg = "internal server error"
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": msg})
 			return
@@ -65,7 +65,7 @@ func (c *Controller) Login(ctx *gin.Context) {
 		msg := err.Error()
 		// Keep auth failures descriptive; hide internal errors
 		if msg != "invalid email or password" {
-			log.Printf("auth login: %v", err)
+			slog.Error("auth login failed", "error", err)
 			msg = "internal server error"
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": msg})
 			return
