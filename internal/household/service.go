@@ -6,13 +6,20 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/notification"
 	"gorm.io/gorm"
+)
+
+const (
+	householdCacheKeyPrefix = "household:"
+	householdListCacheKey   = "households:user:"
 )
 
 // Service handles household business logic.
 type Service struct {
 	db           *gorm.DB
+	cache        *cache.Cache
 	notification *notification.Service
 }
 
@@ -33,9 +40,10 @@ type AddMemberRequest struct {
 }
 
 // NewService creates a new household service.
-func NewService(db *gorm.DB, notificationSvc *notification.Service) *Service {
+func NewService(db *gorm.DB, notificationSvc *notification.Service, cacheClient *cache.Cache) *Service {
 	return &Service{
 		db:           db,
+		cache:        cacheClient,
 		notification: notificationSvc,
 	}
 }
@@ -80,19 +88,16 @@ func (s *Service) Create(ownerID uint, req *CreateRequest) (*Household, error) {
 }
 
 // GetByID retrieves a household by ID.
-func (s *Service) GetByID(id uint) (*Household, error) {
-	var household Household
-	if err := s.db.Preload("Members").First(&household, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("household not found")
-		}
-		return nil, fmt.Errorf("failed to get household: %w", err)
-	}
-	return &household, nil
-}
-
-// ListByUser retrieves all households the user is a member of.
 func (s *Service) ListByUser(userID uint) ([]Household, error) {
+	// Try cache first
+	cacheKey := fmt.Sprintf("%s%d", householdListCacheKey, userID)
+	if s.cache != nil {
+		var cached []Household
+		if hit, err := s.cache.Get(context.Background(), cacheKey, &cached); hit && err == nil {
+			return cached, nil
+		}
+	}
+
 	var households []Household
 	if err := s.db.
 		Preload("Members").
@@ -102,7 +107,43 @@ func (s *Service) ListByUser(userID uint) ([]Household, error) {
 		return nil, fmt.Errorf("failed to list households for user: %w", err)
 	}
 
+	// Store in cache
+	if s.cache != nil {
+		if err := s.cache.Set(context.Background(), cacheKey, &households); err != nil {
+			slog.Warn("failed to cache household list", "error", err)
+		}
+	}
+
 	return households, nil
+}
+
+// GetByID retrieves a household by ID.
+func (s *Service) GetByID(id uint) (*Household, error) {
+	// Try cache first
+	cacheKey := fmt.Sprintf("%s%d", householdCacheKeyPrefix, id)
+	if s.cache != nil {
+		var cached Household
+		if hit, err := s.cache.Get(context.Background(), cacheKey, &cached); hit && err == nil {
+			return &cached, nil
+		}
+	}
+
+	var household Household
+	if err := s.db.Preload("Members").First(&household, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("household not found")
+		}
+		return nil, fmt.Errorf("failed to get household: %w", err)
+	}
+
+	// Store in cache
+	if s.cache != nil {
+		if err := s.cache.Set(context.Background(), cacheKey, &household); err != nil {
+			slog.Warn("failed to cache household", "error", err)
+		}
+	}
+
+	return &household, nil
 }
 
 // Update updates household details. Only the owner can update.
@@ -123,6 +164,9 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*Household, error
 	if err := s.db.Save(&household).Error; err != nil {
 		return nil, fmt.Errorf("failed to update household: %w", err)
 	}
+
+	// Invalidate caches
+	s.invalidateHouseholdCache(household.ID)
 
 	// Notify the household members about the update
 	s.notify(context.Background(), notification.NotificationTypeHouseholdUpdated,
@@ -163,6 +207,9 @@ func (s *Service) Delete(id, userID uint) error {
 		return fmt.Errorf("failed to delete household: %w", err)
 	}
 
+	// Invalidate caches
+	s.invalidateHouseholdCache(household.ID)
+
 	// Notify members about the household deletion
 	s.notify(context.Background(), notification.NotificationTypeHouseholdDeleted,
 		"Household deleted",
@@ -192,6 +239,9 @@ func (s *Service) AddMember(id, ownerID uint, req *AddMemberRequest) (*Household
 	if err := s.db.Create(&member).Error; err != nil {
 		return nil, fmt.Errorf("failed to add member: %w", err)
 	}
+
+	// Invalidate caches
+	s.invalidateHouseholdCache(id)
 
 	// Notify the household members about the added member
 	var household Household
@@ -225,6 +275,9 @@ func (s *Service) RemoveMember(id, ownerID, memberUserID uint) error {
 	if result.RowsAffected == 0 {
 		return errors.New("member not found in household")
 	}
+
+	// Invalidate caches
+	s.invalidateHouseholdCache(id)
 
 	// Notify the household members about the removed member
 	var household Household
@@ -319,4 +372,19 @@ func (s *Service) HouseholdIDForHistory(historyID uint) (uint, error) {
 		return 0, fmt.Errorf("failed to resolve household for history: %w", err)
 	}
 	return result.HouseholdID, nil
+}
+
+// invalidateHouseholdCache removes all cached data for a household.
+func (s *Service) invalidateHouseholdCache(householdID uint) {
+	if s.cache == nil {
+		return
+	}
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", householdCacheKeyPrefix, householdID)
+	if err := s.cache.Delete(ctx, key); err != nil {
+		slog.Warn("failed to invalidate household cache", "household_id", householdID, "error", err)
+	}
+	if err := s.cache.DeleteByPattern(ctx, householdListCacheKey+"*"); err != nil {
+		slog.Warn("failed to invalidate household list cache pattern", "error", err)
+	}
 }

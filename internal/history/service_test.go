@@ -12,7 +12,7 @@ import (
 func newTestService(t *testing.T) (*history.Service, *category.Service) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
-	return history.NewService(db), category.NewService(db)
+	return history.NewService(db), category.NewService(db, nil)
 }
 
 func TestHistory_Record(t *testing.T) {
@@ -154,7 +154,7 @@ func TestHistory_Delete_NotFound(t *testing.T) {
 func TestHistory_ListByHouseholdID(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	historySvc := history.NewService(db)
-	catSvc := category.NewService(db)
+	catSvc := category.NewService(db, nil)
 
 	sl1 := &shoppinglist.ShoppingList{HouseholdID: 1, Name: "List A", CreatedBy: 1}
 	sl2 := &shoppinglist.ShoppingList{HouseholdID: 1, Name: "List B", CreatedBy: 1}

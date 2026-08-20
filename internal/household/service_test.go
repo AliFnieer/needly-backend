@@ -14,7 +14,7 @@ import (
 func TestCreate(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, err := svc.Create(user.ID, &household.CreateRequest{Name: "My Household"})
 	if err != nil {
@@ -45,7 +45,7 @@ func TestCreate(t *testing.T) {
 func TestGetByID(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "get@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(user.ID, &household.CreateRequest{Name: "Get Test"})
 
@@ -67,7 +67,7 @@ func TestListByUser(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user1 := testutil.SeedUser(t, db, "user1@test.com", "password123")
 	user2 := testutil.SeedUser(t, db, "user2@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h1, _ := svc.Create(user1.ID, &household.CreateRequest{Name: "User1 Household"})
 	svc.Create(user2.ID, &household.CreateRequest{Name: "User2 Household"})
@@ -97,7 +97,7 @@ func TestListByUser(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "update@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(user.ID, &household.CreateRequest{Name: "Old Name"})
 
@@ -119,7 +119,7 @@ func TestUpdateNonOwnerFails(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	member := testutil.SeedUser(t, db, "member@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
@@ -133,7 +133,7 @@ func TestUpdateNonOwnerFails(t *testing.T) {
 func TestDelete(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "del@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(user.ID, &household.CreateRequest{Name: "To Delete"})
 
@@ -152,7 +152,7 @@ func TestDeleteNonOwnerFails(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	member := testutil.SeedUser(t, db, "member@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
@@ -167,7 +167,7 @@ func TestAddMember(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	newMember := testutil.SeedUser(t, db, "new@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 
@@ -193,7 +193,7 @@ func TestAddMemberNonOwnerFails(t *testing.T) {
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	member := testutil.SeedUser(t, db, "member@test.com", "password123")
 	third := testutil.SeedUser(t, db, "third@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
@@ -208,7 +208,7 @@ func TestRemoveMember(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	member := testutil.SeedUser(t, db, "member@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
@@ -227,7 +227,7 @@ func TestRemoveMember(t *testing.T) {
 func TestRemoveOwnerFails(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 
@@ -241,7 +241,7 @@ func TestRemoveNonMemberFails(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	outsider := testutil.SeedUser(t, db, "outsider@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 
@@ -256,7 +256,7 @@ func TestRemoveMemberNonOwnerFails(t *testing.T) {
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	member := testutil.SeedUser(t, db, "member@test.com", "password123")
 	third := testutil.SeedUser(t, db, "third@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
@@ -273,7 +273,7 @@ func TestCheckMember(t *testing.T) {
 	owner := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	member := testutil.SeedUser(t, db, "member@test.com", "password123")
 	outsider := testutil.SeedUser(t, db, "outsider@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
 	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
@@ -292,7 +292,7 @@ func TestCheckMember(t *testing.T) {
 func TestHouseholdIDForList(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 
@@ -315,7 +315,7 @@ func TestHouseholdIDForList(t *testing.T) {
 func TestHouseholdIDForItem(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 
@@ -346,7 +346,7 @@ func TestHouseholdIDForItem(t *testing.T) {
 func TestHouseholdIDForHistory(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	svc := household.NewService(db, nil)
+	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 

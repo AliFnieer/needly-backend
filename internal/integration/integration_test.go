@@ -42,10 +42,10 @@ func setupServer(t *testing.T) *testServer {
 
 	api := engine.Group("/api/v1")
 	auth.RegisterRoutes(api, db, cfg, nil)
-	household.RegisterRoutes(api, db, cfg, nil)
+	household.RegisterRoutes(api, db, cfg, nil, nil)
 	shoppinglist.RegisterRoutes(api, db, cfg, nil, nil)
 	shoppingitem.RegisterRoutes(api, db, cfg, nil, nil)
-	category.RegisterRoutes(api, db, cfg)
+	category.RegisterRoutes(api, db, cfg, nil)
 	history.RegisterRoutes(api, db, cfg)
 
 	return &testServer{engine: engine, db: db, cfg: cfg}

@@ -197,14 +197,15 @@ func (s *Server) setupRoutes() {
 
 	// API documentation
 	s.engine.GET("/docs", gin.WrapH(docs.SwaggerUIHandler()))
+	s.engine.GET("/docs/redoc", gin.WrapH(docs.RedocUIHandler()))
 	s.engine.GET("/docs/openapi.json", gin.WrapH(http.HandlerFunc(docs.ServeOpenAPIHandler)))
 
 	// API v1 routes
 	apiV1 := s.engine.Group("/api/v1")
 	auth.RegisterRoutes(apiV1, s.db, s.cfg, s.rateLimiter)
-	category.RegisterRoutes(apiV1, s.db, s.cfg)
+	category.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
 	history.RegisterRoutes(apiV1, s.db, s.cfg)
-	household.RegisterRoutes(apiV1, s.db, s.cfg, s.notificationSvc)
+	household.RegisterRoutes(apiV1, s.db, s.cfg, s.notificationSvc, s.cache)
 	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
 	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
 	notification.RegisterRoutes(apiV1, s.notificationSvc, s.cfg, s.db)

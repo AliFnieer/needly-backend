@@ -10,7 +10,7 @@ import (
 func newTestService(t *testing.T) *category.Service {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
-	return category.NewService(db)
+	return category.NewService(db, nil)
 }
 
 func TestCategory_Create(t *testing.T) {

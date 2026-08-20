@@ -1,6 +1,7 @@
 package category
 
 import (
+	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
@@ -8,8 +9,8 @@ import (
 )
 
 // RegisterRoutes registers category routes scoped to a household.
-func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
-	service := NewService(db)
+func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, cacheClient *cache.Cache) {
+	service := NewService(db, cacheClient)
 	controller := NewController(service)
 
 	// Categories are scoped to a household and require membership

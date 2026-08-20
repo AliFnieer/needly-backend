@@ -11,7 +11,7 @@ import (
 func TestCreate(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	hhSvc := household.NewService(db, nil)
+	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
 
 	hh, err := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
@@ -37,7 +37,7 @@ func TestCreate(t *testing.T) {
 func TestGetByID(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	hhSvc := household.NewService(db, nil)
+	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
@@ -60,7 +60,7 @@ func TestGetByID(t *testing.T) {
 func TestListByHouseholdID(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	hhSvc := household.NewService(db, nil)
+	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
@@ -87,7 +87,7 @@ func TestListByHouseholdID(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	hhSvc := household.NewService(db, nil)
+	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
@@ -120,7 +120,7 @@ func TestUpdateNotFound(t *testing.T) {
 func TestDelete(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	hhSvc := household.NewService(db, nil)
+	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
@@ -150,7 +150,7 @@ func TestDeleteNotFound(t *testing.T) {
 func TestListByHouseholdIDEmpty(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
-	hhSvc := household.NewService(db, nil)
+	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})

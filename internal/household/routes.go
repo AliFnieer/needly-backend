@@ -1,6 +1,7 @@
 package household
 
 import (
+	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/AliFnieer/needly-backend/internal/notification"
@@ -9,8 +10,8 @@ import (
 )
 
 // RegisterRoutes registers household routes on the given router group.
-func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, notificationSvc *notification.Service) {
-	service := NewService(db, notificationSvc)
+func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, notificationSvc *notification.Service, cacheClient *cache.Cache) {
+	service := NewService(db, notificationSvc, cacheClient)
 	controller := NewController(service)
 
 	// All household routes require authentication
