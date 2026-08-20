@@ -8,19 +8,22 @@ import (
 )
 
 // RegisterRoutes registers auth routes on the given router group.
-func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
+func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, rl *middleware.RateLimiter) {
 	service := NewService(db, cfg)
 	controller := NewController(service)
 
-	// Public routes
+	// Public routes — stricter rate limit (10 req/min)
 	authGroup := router.Group("/auth")
+	if rl != nil {
+		authGroup.Use(rl.StrictMiddleware())
+	}
 	{
 		authGroup.POST("/register", controller.Register)
 		authGroup.POST("/login", controller.Login)
 		authGroup.POST("/refresh", controller.Refresh)
 	}
 
-	// Protected routes (require JWT)
+	// Protected routes (require JWT) — global rate limit applies
 	protected := router.Group("")
 	protected.Use(middleware.AuthMiddleware(cfg))
 	{

@@ -111,7 +111,7 @@ func (s *Server) setupMiddleware() {
 	s.engine.Use(s.rateLimiter.Middleware())
 
 	// API version header
-	s.engine.Use(middleware.VersionMiddleware())
+	s.engine.Use(middleware.APIVersionMiddleware())
 
 	// Circuit breaker for downstream protection
 	cb := middleware.NewCircuitBreaker(&middleware.CircuitBreakerConfig{
@@ -179,7 +179,7 @@ func (s *Server) setupRoutes() {
 	apiV1 := s.engine.Group("/api/v1")
 
 	// Register feature routes
-	auth.RegisterRoutes(apiV1, s.db, s.cfg)
+	auth.RegisterRoutes(apiV1, s.db, s.cfg, s.rateLimiter)
 	category.RegisterRoutes(apiV1, s.db, s.cfg)
 	history.RegisterRoutes(apiV1, s.db, s.cfg)
 	household.RegisterRoutes(apiV1, s.db, s.cfg, s.notificationSvc)

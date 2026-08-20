@@ -38,10 +38,10 @@ func setupServer(t *testing.T) *testServer {
 
 	engine := gin.New()
 	engine.Use(gin.Recovery())
-	engine.Use(middleware.VersionMiddleware())
+	engine.Use(middleware.APIVersionMiddleware())
 
 	api := engine.Group("/api/v1")
-	auth.RegisterRoutes(api, db, cfg)
+	auth.RegisterRoutes(api, db, cfg, nil)
 	household.RegisterRoutes(api, db, cfg, nil)
 	shoppinglist.RegisterRoutes(api, db, cfg, nil, nil)
 	shoppingitem.RegisterRoutes(api, db, cfg, nil, nil)
@@ -255,8 +255,8 @@ func TestAPI_VersionHeader(t *testing.T) {
 	s := setupServer(t)
 
 	w := s.doRequest("GET", "/api/v1/auth/me", nil, nil)
-	if w.Header().Get("X-API-Version") != "v1" {
-		t.Errorf("expected X-API-Version: v1, got %s", w.Header().Get("X-API-Version"))
+	if w.Header().Get("API-Version") != middleware.CurrentAPIVersion {
+		t.Errorf("expected API-Version: %s, got %s", middleware.CurrentAPIVersion, w.Header().Get("API-Version"))
 	}
 }
 
