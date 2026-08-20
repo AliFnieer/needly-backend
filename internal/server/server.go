@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"database/sql"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -19,16 +21,15 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
 	"github.com/AliFnieer/needly-backend/internal/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 const (
-	// defaultCacheTTL is the default time-to-live for cached data.
 	defaultCacheTTL = 5 * time.Minute
 )
 
-// Server represents the HTTP server with its dependencies.
 type Server struct {
 	engine *gin.Engine
 	cfg    *config.Config
@@ -37,19 +38,14 @@ type Server struct {
 	cache  *cache.Cache
 	hub    *websocket.Hub
 
-	rateLimiter    *middleware.RateLimiter
+	rateLimiter     *middleware.RateLimiter
 	notificationSvc *notification.Service
-	obsMiddleware  *observability.Middleware
-	metrics        *observability.Metrics
-	tracer         *observability.Tracer
-	logger         *observability.Logger
+	obsMiddleware   *observability.Middleware
+	metrics         *observability.Metrics
 }
 
-// NewServer creates a new Gin server with all routes registered.
 func NewServer(cfg *config.Config, db *gorm.DB, redisClient *redis.Client) *Server {
-	// Set Gin mode
 	gin.SetMode(cfg.Server.GinMode)
-
 	engine := gin.New()
 
 	srv := &Server{
@@ -60,60 +56,96 @@ func NewServer(cfg *config.Config, db *gorm.DB, redisClient *redis.Client) *Serv
 		cache:  cache.NewCache(redisClient, defaultCacheTTL),
 	}
 
-	// Initialize observability (logging, metrics, tracing)
-	srv.logger = observability.NewLogger("info", nil)
 	srv.metrics = observability.NewMetrics()
-	srv.tracer = observability.NewTracer()
-	srv.obsMiddleware = observability.NewMiddleware(srv.logger, srv.metrics, srv.tracer)
+	srv.obsMiddleware = observability.NewMiddleware(srv.metrics)
 
-	// Create and start websocket hub with Redis Pub/Sub distribution
+	// Register DB pool stats as a custom Prometheus collector
+	srv.registerDBPoolStats()
+
 	srv.hub = websocket.NewHub(redisClient)
 	go srv.hub.Run()
 
-	// Create the rate limiter backed by Redis
 	srv.rateLimiter = middleware.NewRateLimiter(redisClient, &cfg.RateLimit)
-
-	// Create the push notification service backed by the WebSocket hub and Redis
 	srv.notificationSvc = notification.NewService(srv.hub, redisClient, &cfg.Notification)
 
-	// Global middleware
 	srv.setupMiddleware()
-
-	// Register routes
 	srv.setupRoutes()
 
 	return srv
 }
 
-// setupMiddleware configures global middleware.
+func (s *Server) registerDBPoolStats() {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		slog.Warn("failed to get sql.DB for pool stats", "error", err)
+		return
+	}
+
+	statsCollector := &dbPoolStatsCollector{db: sqlDB}
+	srv := s.metrics
+	_ = srv // just to verify it's accessible
+	prometheus.MustRegister(statsCollector)
+	slog.Info("database pool stats collector registered")
+}
+
+type dbPoolStatsCollector struct {
+	db *sql.DB
+}
+
+func (c *dbPoolStatsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- prometheus.NewDesc("db_pool_open_connections", "Number of open database connections", nil, nil)
+	ch <- prometheus.NewDesc("db_pool_in_use", "Number of connections currently in use", nil, nil)
+	ch <- prometheus.NewDesc("db_pool_idle", "Number of idle database connections", nil, nil)
+	ch <- prometheus.NewDesc("db_pool_wait_count", "Total number of connections waited for", nil, nil)
+	ch <- prometheus.NewDesc("db_pool_wait_duration_seconds", "Total time waited for connections", nil, nil)
+	ch <- prometheus.NewDesc("db_pool_max_idle_closed", "Connections closed because of max idle", nil, nil)
+	ch <- prometheus.NewDesc("db_pool_max_lifetime_closed", "Connections closed because of max lifetime", nil, nil)
+}
+
+func (c *dbPoolStatsCollector) Collect(ch chan<- prometheus.Metric) {
+	stats := c.db.Stats()
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_open_connections", "Number of open database connections", nil, nil),
+		prometheus.GaugeValue, float64(stats.OpenConnections),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_in_use", "Number of connections currently in use", nil, nil),
+		prometheus.GaugeValue, float64(stats.InUse),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_idle", "Number of idle database connections", nil, nil),
+		prometheus.GaugeValue, float64(stats.Idle),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_wait_count", "Total number of connections waited for", nil, nil),
+		prometheus.CounterValue, float64(stats.WaitCount),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_wait_duration_seconds", "Total time waited for connections", nil, nil),
+		prometheus.CounterValue, stats.WaitDuration.Seconds(),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_max_idle_closed", "Connections closed because of max idle", nil, nil),
+		prometheus.CounterValue, float64(stats.MaxIdleClosed),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc("db_pool_max_lifetime_closed", "Connections closed because of max lifetime", nil, nil),
+		prometheus.CounterValue, float64(stats.MaxLifetimeClosed),
+	)
+}
+
 func (s *Server) setupMiddleware() {
-	// Request timeout — applied early so it covers handler execution
 	s.engine.Use(middleware.RequestTimeoutMiddleware(30 * time.Second))
-
-	// Request ID — first so it's available to all downstream middleware/logs
 	s.engine.Use(middleware.RequestIDMiddleware())
-
-	// Observability (logging + metrics + tracing) — uses request_id
 	s.engine.Use(s.obsMiddleware.GinMiddleware())
-
 	s.engine.Use(gin.Recovery())
-
-	// Security headers
 	s.engine.Use(middleware.SecurityMiddleware(s.cfg.Server.GinMode))
-
-	// Response compression (gzip for clients that accept it)
 	s.engine.Use(middleware.CompressionMiddleware())
-
-	// CORS middleware
 	s.engine.Use(s.corsMiddleware())
-
-	// Redis-backed rate limiting applied to all requests
 	s.engine.Use(s.rateLimiter.Middleware())
-
-	// API version header
 	s.engine.Use(middleware.APIVersionMiddleware())
 
-	// Circuit breaker for downstream protection
 	cb := middleware.NewCircuitBreaker(&middleware.CircuitBreakerConfig{
 		Threshold:    5,
 		ResetTimeout: 30 * time.Second,
@@ -122,9 +154,7 @@ func (s *Server) setupMiddleware() {
 	s.engine.Use(cb.Middleware())
 }
 
-// setupRoutes registers all API route groups.
 func (s *Server) setupRoutes() {
-	// Health check — verifies DB and Redis connectivity
 	s.engine.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 		defer cancel()
@@ -132,7 +162,6 @@ func (s *Server) setupRoutes() {
 		status := gin.H{"status": "ok"}
 		healthy := true
 
-		// Check database
 		sqlDB, err := s.db.DB()
 		if err != nil {
 			status["database"] = "error"
@@ -144,7 +173,6 @@ func (s *Server) setupRoutes() {
 			status["database"] = "ok"
 		}
 
-		// Check Redis
 		if err := s.redis.Ping(ctx).Err(); err != nil {
 			status["redis"] = "error"
 			healthy = false
@@ -160,25 +188,19 @@ func (s *Server) setupRoutes() {
 		c.JSON(httpStatus, status)
 	})
 
-	// Internal observability endpoints — always protected by auth
+	// Internal endpoints — auth-protected
 	internal := s.engine.Group("")
 	internal.Use(middleware.AuthMiddleware(s.cfg))
 	{
-		// Metrics endpoint
-		internal.GET("/metrics", gin.WrapH(s.metrics.MetricsHandler()))
-
-		// Tracing summary endpoint
-		internal.GET("/debug/traces", gin.WrapH(s.tracer.TraceHandler()))
+		internal.GET("/metrics", gin.WrapH(s.metrics.Handler()))
 	}
 
-	// API documentation (always public)
+	// API documentation
 	s.engine.GET("/docs", gin.WrapH(docs.SwaggerUIHandler()))
 	s.engine.GET("/docs/openapi.json", gin.WrapH(http.HandlerFunc(docs.ServeOpenAPIHandler)))
 
 	// API v1 routes
 	apiV1 := s.engine.Group("/api/v1")
-
-	// Register feature routes
 	auth.RegisterRoutes(apiV1, s.db, s.cfg, s.rateLimiter)
 	category.RegisterRoutes(apiV1, s.db, s.cfg)
 	history.RegisterRoutes(apiV1, s.db, s.cfg)
@@ -186,12 +208,9 @@ func (s *Server) setupRoutes() {
 	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
 	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
 	notification.RegisterRoutes(apiV1, s.notificationSvc, s.cfg, s.db)
-
-	// Register websocket routes
 	websocket.RegisterRoutes(apiV1, s.hub, s.db, s.cfg)
 }
 
-// Engine returns the underlying Gin engine (for external http.Server wrapping).
 func (s *Server) Engine() *gin.Engine {
 	return s.engine
 }

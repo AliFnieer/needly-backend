@@ -89,6 +89,33 @@ Controls push notification delivery and WebSocket notification behavior.
 
 ---
 
+## Distributed Tracing (OpenTelemetry)
+
+The application uses OpenTelemetry with OTLP HTTP export. Traces are sent to a collector endpoint (e.g. Jaeger, Grafana Tempo).
+
+| Variable                      | Type   | Default      | Required | Description                                          | Example              |
+| ----------------------------- | ------ | ------------ | -------- | ---------------------------------------------------- | -------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | string | `""`         | no       | OTLP HTTP collector endpoint (host:port). Empty disables tracing. | `jaeger:4318`        |
+| `OTEL_SERVICE_NAME`           | string | `needly-api` | no       | Service name shown in trace backends.                | `needly-api`         |
+| `LOG_LEVEL`                   | string | `info`       | no       | Structured log level: debug, info, warn, error.      | `info`               |
+
+### Metrics
+
+The `/metrics` endpoint exposes Prometheus-format metrics (auth-protected). Key metric families:
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `http_requests_total` | counter | method, path, status | Total HTTP requests |
+| `http_request_duration_seconds` | histogram | method, path, status | Request latency |
+| `http_active_requests` | gauge | — | In-flight requests |
+| `db_queries_total` | counter | operation | DB query count |
+| `db_query_duration_seconds` | histogram | operation | DB query latency |
+| `db_pool_open_connections` | gauge | — | Open DB connections |
+| `cache_hits_total` / `cache_misses_total` | counter | — | Cache hit/miss count |
+| `ws_active_connections` | gauge | — | Active WebSocket connections |
+
+---
+
 ## TLS (Optional)
 
 When both variables are set, the server starts with HTTPS using `ListenAndServeTLS`. When empty, plain HTTP is used.
@@ -163,6 +190,11 @@ NOTIFICATIONS_HISTORY_LIMIT=50
 DB_MAX_OPEN_CONNS=25
 DB_MAX_IDLE_CONNS=5
 DB_CONN_MAX_LIFETIME_MINUTES=5
+
+# OpenTelemetry tracing
+OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4318
+OTEL_SERVICE_NAME=needly-api
+LOG_LEVEL=info
 ```
 
 ### Generating a secure JWT secret
@@ -208,3 +240,6 @@ This produces a 64-character hex string suitable for `JWT_SECRET`.
 | `DB_MAX_OPEN_CONNS`           | `25`                                    |
 | `DB_MAX_IDLE_CONNS`           | `5`                                     |
 | `DB_CONN_MAX_LIFETIME_MINUTES`| `5`                                     |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `""` (disabled)                          |
+| `OTEL_SERVICE_NAME`           | `needly-api`                             |
+| `LOG_LEVEL`                   | `info`                                   |

@@ -1,24 +1,29 @@
 package observability
 
 import (
+	"context"
+	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
-// Middleware provides Gin middleware that integrates logging, metrics, and tracing.
+var tracer = otel.Tracer("needly-api")
+
+// Middleware provides Gin middleware that integrates OTel tracing, Prometheus metrics, and structured logging.
 type Middleware struct {
-	logger  *Logger
 	metrics *Metrics
-	tracer  *Tracer
 }
 
 // NewMiddleware creates a new observability middleware.
-func NewMiddleware(logger *Logger, metrics *Metrics, tracer *Tracer) *Middleware {
+func NewMiddleware(metrics *Metrics) *Middleware {
 	return &Middleware{
-		logger:  logger,
 		metrics: metrics,
-		tracer:  tracer,
 	}
 }
 
@@ -29,85 +34,82 @@ func (m *Middleware) GinMiddleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		method := c.Request.Method
 
-		// Start a trace span
-		ctx, span := m.tracer.StartSpan(c.Request.Context(), method+" "+path, map[string]any{
-			"method": method,
-			"path":   path,
-		})
+		// Start OTel span
+		ctx, span := tracer.Start(c.Request.Context(), method+" "+path,
+			oteltrace.WithAttributes(
+				attribute.String("http.method", method),
+				attribute.String("http.url", path),
+				attribute.String("http.user_agent", c.Request.UserAgent()),
+				attribute.String("http.client_ip", c.ClientIP()),
+			),
+		)
+		defer span.End()
 
-		// Replace the request context with the traced context
 		c.Request = c.Request.WithContext(ctx)
 
-		// Record the request
-		m.metrics.IncHTTPRequest(method, path)
+		// Track active requests
+		m.metrics.HTTPActiveRequests.Inc()
 
 		// Process request
 		c.Next()
 
 		// Record metrics after processing
 		duration := time.Since(start)
-		m.metrics.ObserveHTTPDuration(method, path, duration)
-		m.metrics.DecHTTPRequest()
-
 		status := c.Writer.Status()
+		statusStr := strconv.Itoa(status)
 
-		// Log the request
-		if m.logger != nil {
-			fields := []any{
-				"method", method,
-				"path", path,
-				"status", status,
-				"duration_ms", duration.Milliseconds(),
-				"client_ip", c.ClientIP(),
-				"user_agent", c.Request.UserAgent(),
-			}
+		m.metrics.HTTPActiveRequests.Dec()
+		m.metrics.HTTPRequestsTotal.WithLabelValues(method, path, statusStr).Inc()
+		m.metrics.HTTPRequestDuration.WithLabelValues(method, path, statusStr).Observe(duration.Seconds())
 
-			// Add user ID if authenticated
-			if userID, exists := c.Get("user_id"); exists {
-				fields = append(fields, "user_id", userID)
-			}
+		// Set span attributes
+		span.SetAttributes(
+			attribute.Int("http.status_code", status),
+			attribute.Float64("http.duration_ms", float64(duration.Milliseconds())),
+		)
 
-			// Add request ID if present
-			if requestID := c.GetString("request_id"); requestID != "" {
-				fields = append(fields, "request_id", requestID)
-			}
-
-			if status >= 500 {
-				m.logger.Error("http request failed", fields...)
-			} else if status >= 400 {
-				m.logger.Warn("http request warning", fields...)
-			} else {
-				m.logger.Info("http request", fields...)
-			}
-		}
-
-		// End the trace span
-		spanStatus := TraceStatusOK
+		// Set span status
 		if status >= 500 {
-			spanStatus = TraceStatusError
-		} else if status == 404 {
-			spanStatus = TraceStatusNotFound
+			span.SetStatus(codes.Error, "server error")
+			span.RecordError(c.Errors.Last().Err)
+		} else if status >= 400 {
+			span.SetStatus(codes.Error, "client error")
+		} else {
+			span.SetStatus(codes.Ok, "")
 		}
-		m.tracer.End(span, spanStatus)
+
+		// Structured logging
+		fields := []any{
+			"method", method,
+			"path", path,
+			"status", status,
+			"duration_ms", duration.Milliseconds(),
+			"client_ip", c.ClientIP(),
+			"user_agent", c.Request.UserAgent(),
+		}
+
+		if userID, exists := c.Get("user_id"); exists {
+			fields = append(fields, "user_id", userID)
+		}
+		if requestID := c.GetString("request_id"); requestID != "" {
+			fields = append(fields, "request_id", requestID)
+		}
+		if traceID := span.SpanContext().TraceID(); traceID.IsValid() {
+			fields = append(fields, "trace_id", traceID.String())
+		}
+
+		switch {
+		case status >= 500:
+			slog.Error("http request failed", fields...)
+		case status >= 400:
+			slog.Warn("http request error", fields...)
+		default:
+			slog.Info("http request", fields...)
+		}
 	}
 }
 
-// DBQuery returns a function to record a database query with metrics.
-func (m *Middleware) DBQuery(operation string) func() {
-	start := time.Now()
-	return func() {
-		duration := time.Since(start)
-		m.metrics.IncDBQuery(operation)
-		m.metrics.ObserveDBDuration(operation, duration)
-	}
-}
-
-// DBCacheHit records a cache hit.
-func (m *Middleware) DBCacheHit() {
-	m.metrics.IncCacheHit()
-}
-
-// DBCacheMiss records a cache miss.
-func (m *Middleware) DBCacheMiss() {
-	m.metrics.IncCacheMiss()
+// StartSpan creates a new child span from the given context.
+func StartSpan(ctx context.Context, name string, opts ...oteltrace.SpanStartOption) (context.Context, oteltrace.Span) {
+	return tracer.Start(ctx, name, opts...)
 }

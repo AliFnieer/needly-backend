@@ -71,10 +71,11 @@ type NotificationConfig struct {
 	HistoryLimit     int
 }
 
-// TracingConfig configures distributed tracing export.
+// TracingConfig configures OpenTelemetry distributed tracing.
 type TracingConfig struct {
-	JaegerEndpoint string
-	ServiceName    string
+	OTLPEndpoint string
+	ServiceName  string
+	LogLevel     string
 }
 
 const (
@@ -130,8 +131,9 @@ func Load() *Config {
 			HistoryLimit:     getEnvAsInt("NOTIFICATIONS_HISTORY_LIMIT", 50),
 		},
 		Tracing: TracingConfig{
-			JaegerEndpoint: getEnv("JAEGER_ENDPOINT", ""),
-			ServiceName:    getEnv("JAEGER_SERVICE_NAME", "needly-api"),
+			OTLPEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+			ServiceName:  getEnv("OTEL_SERVICE_NAME", "needly-api"),
+			LogLevel:     getEnv("LOG_LEVEL", "info"),
 		},
 	}
 

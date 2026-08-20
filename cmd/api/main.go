@@ -12,11 +12,31 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/database"
+	"github.com/AliFnieer/needly-backend/internal/observability"
 	"github.com/AliFnieer/needly-backend/internal/server"
 )
 
 func main() {
 	cfg := config.Load()
+
+	// Initialize OpenTelemetry tracing
+	otlpEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	shutdownTracer, err := observability.InitTracerProvider(
+		context.Background(),
+		cfg.Tracing.ServiceName,
+		otlpEndpoint,
+	)
+	if err != nil {
+		slog.Error("failed to initialize tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracer(ctx); err != nil {
+			slog.Error("failed to shutdown tracer", "error", err)
+		}
+	}()
 
 	db, err := database.InitPostgres(cfg)
 	if err != nil {
@@ -24,7 +44,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Run SQL migrations in production mode
 	if cfg.Server.GinMode == "release" {
 		if err := database.RunMigrations(db, "migrations"); err != nil {
 			slog.Error("failed to run migrations", "error", err)
@@ -49,7 +68,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start server in a goroutine
 	go func() {
 		slog.Info("server starting", "addr", httpServer.Addr, "mode", cfg.Server.GinMode)
 
@@ -57,7 +75,7 @@ func main() {
 		tlsKey := os.Getenv("TLS_KEY_FILE")
 
 		if tlsCert != "" && tlsKey != "" {
-			slog.Info("TLS enabled", "cert", tlsCert, "key", tlsKey)
+			slog.Info("TLS enabled")
 			if err := httpServer.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
 				slog.Error("TLS server failed", "error", err)
 				os.Exit(1)
@@ -70,14 +88,12 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 
 	slog.Info("shutting down", "signal", sig.String())
 
-	// Give in-flight requests up to 10 seconds to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
