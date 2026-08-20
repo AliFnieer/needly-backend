@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: needly-api-staging
+    environment:
+      GIN_MODE: release
+      PORT: 8080
+      DB_HOST: postgres
+      DB_NAME: needly_staging
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      JWT_SECRET: staging-secret-change-in-production-2026
+      CORS_ALLOWED_ORIGINS: https://staging.needly.app
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_REQUESTS: "200"
+      RATE_LIMIT_WINDOW_SECONDS: "60"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - needly-staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: needly-postgres-staging
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: needly_staging
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    networks:
+      - needly-staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d needly_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: needly-redis-staging
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - staging_redis_data:/data
+    networks:
+      - needly-staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  staging_postgres_data:
+  staging_redis_data:
+
+networks:
+  needly-staging:
+    driver: bridge

@@ -18,6 +18,7 @@ type Config struct {
 	CORS         CORSConfig
 	RateLimit    RateLimitConfig
 	Notification NotificationConfig
+	Tracing      TracingConfig
 }
 
 type ServerConfig struct {
@@ -26,13 +27,16 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
-	TimeZone string
+	Host                   string
+	Port                   string
+	User                   string
+	Password               string
+	Name                   string
+	SSLMode                string
+	TimeZone               string
+	MaxOpenConns           int
+	MaxIdleConns           int
+	ConnMaxLifetimeMinutes int
 }
 
 type RedisConfig struct {
@@ -67,6 +71,12 @@ type NotificationConfig struct {
 	HistoryLimit     int
 }
 
+// TracingConfig configures distributed tracing export.
+type TracingConfig struct {
+	JaegerEndpoint string
+	ServiceName    string
+}
+
 const (
 	// defaultJWTSecret is the placeholder secret that must not be used in production.
 	defaultJWTSecret = "your_super_secret_jwt_key_change_me"
@@ -83,13 +93,16 @@ func Load() *Config {
 			GinMode: getEnv("GIN_MODE", "debug"),
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
-			Name:     getEnv("DB_NAME", "needly"),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
-			TimeZone: getEnv("DB_TIMEZONE", "Africa/Tripoli"),
+			Host:                   getEnv("DB_HOST", "localhost"),
+			Port:                   getEnv("DB_PORT", "5432"),
+			User:                   getEnv("DB_USER", "postgres"),
+			Password:               getEnv("DB_PASSWORD", "postgres"),
+			Name:                   getEnv("DB_NAME", "needly"),
+			SSLMode:                getEnv("DB_SSLMODE", "disable"),
+			TimeZone:               getEnv("DB_TIMEZONE", "Africa/Tripoli"),
+			MaxOpenConns:           getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:           getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetimeMinutes: getEnvAsInt("DB_CONN_MAX_LIFETIME_MINUTES", 5),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),
@@ -115,6 +128,10 @@ func Load() *Config {
 			Enabled:          getEnvAsBool("NOTIFICATIONS_ENABLED", true),
 			WebSocketEnabled: getEnvAsBool("NOTIFICATIONS_WEBSOCKET_ENABLED", true),
 			HistoryLimit:     getEnvAsInt("NOTIFICATIONS_HISTORY_LIMIT", 50),
+		},
+		Tracing: TracingConfig{
+			JaegerEndpoint: getEnv("JAEGER_ENDPOINT", ""),
+			ServiceName:    getEnv("JAEGER_SERVICE_NAME", "needly-api"),
 		},
 	}
 
