@@ -63,8 +63,9 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Validate issuer claim
-		if issuer, _ := claims["iss"].(string); issuer != "" && issuer != cfg.JWT.Issuer {
+		// Validate issuer claim — must match configured issuer
+		issuer, _ := claims["iss"].(string)
+		if issuer != cfg.JWT.Issuer {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid token issuer",
 			})
