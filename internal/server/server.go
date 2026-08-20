@@ -101,11 +101,25 @@ func (s *Server) setupMiddleware() {
 	// Security headers
 	s.engine.Use(middleware.SecurityMiddleware(s.cfg.Server.GinMode))
 
+	// Response compression (gzip for clients that accept it)
+	s.engine.Use(middleware.CompressionMiddleware())
+
 	// CORS middleware
 	s.engine.Use(s.corsMiddleware())
 
 	// Redis-backed rate limiting applied to all requests
 	s.engine.Use(s.rateLimiter.Middleware())
+
+	// API version header
+	s.engine.Use(middleware.VersionMiddleware())
+
+	// Circuit breaker for downstream protection
+	cb := middleware.NewCircuitBreaker(&middleware.CircuitBreakerConfig{
+		Threshold:    5,
+		ResetTimeout: 30 * time.Second,
+		HalfOpenMax:  2,
+	})
+	s.engine.Use(cb.Middleware())
 }
 
 // setupRoutes registers all API route groups.
