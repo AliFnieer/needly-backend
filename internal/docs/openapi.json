@@ -55,6 +55,10 @@
     {
       "name": "Observability",
       "description": "Health, metrics, and tracing endpoints"
+    },
+    {
+      "name": "Docs",
+      "description": "API documentation endpoints"
     }
   ],
   "paths": {
@@ -1959,6 +1963,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "tags": ["Docs"],
+        "summary": "Swagger UI",
+        "description": "Serves the interactive Swagger UI for exploring the API.",
+        "operationId": "swaggerUI",
+        "responses": {
+          "200": {
+            "description": "Swagger UI HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/docs/openapi.json": {
+      "get": {
+        "tags": ["Docs"],
+        "summary": "OpenAPI specification",
+        "description": "Returns the OpenAPI 3.0 specification for this API in JSON format.",
+        "operationId": "getOpenAPISpec",
+        "responses": {
+          "200": {
+            "description": "OpenAPI specification in JSON format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
