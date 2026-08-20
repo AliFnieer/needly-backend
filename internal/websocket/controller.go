@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -17,7 +17,7 @@ import (
 func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
 	conn, err := upgradeWithOriginCheck(c, cfg)
 	if err != nil {
-		log.Printf("websocket upgrade error: %v", err)
+		slog.Error("websocket upgrade failed", "error", err)
 		return
 	}
 

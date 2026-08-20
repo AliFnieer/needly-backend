@@ -3,7 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/config"
@@ -29,6 +29,6 @@ func InitRedis(cfg *config.Config) (*redis.Client, error) {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
-	log.Printf("redis connected successfully at %s", addr)
+	slog.Info("redis connected", "addr", addr)
 	return client, nil
 }

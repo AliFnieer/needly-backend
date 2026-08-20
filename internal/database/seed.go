@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/category"
@@ -98,7 +98,7 @@ func SeedCategories(db *gorm.DB, categories []category.Category) error {
 		created++
 	}
 
-	log.Printf("seed categories complete: %d created, %d skipped", created, skipped)
+	slog.Info("seed categories complete", "created", created, "skipped", skipped)
 	return nil
 }
 
@@ -141,6 +141,6 @@ func SeedUsers(db *gorm.DB, users []SeedUser) error {
 		created++
 	}
 
-	log.Printf("seed users complete: %d created, %d skipped", created, skipped)
+	slog.Info("seed users complete", "created", created, "skipped", skipped)
 	return nil
 }

@@ -1,7 +1,7 @@
 package history
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -41,7 +41,7 @@ func (ctl *Controller) ListByListID(c *gin.Context) {
 
 	entries, err := ctl.service.ListByListID(listID)
 	if err != nil {
-		log.Printf("history list by list: %v", err)
+		slog.Error("history list by list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})
@@ -60,7 +60,7 @@ func (ctl *Controller) ListByHouseholdID(c *gin.Context) {
 
 	entries, err := ctl.service.ListByHouseholdID(householdID)
 	if err != nil {
-		log.Printf("history list by household: %v", err)
+		slog.Error("history list by household failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})
