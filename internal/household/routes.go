@@ -19,7 +19,9 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, no
 	{
 		householdGroup.GET("", controller.List)
 		householdGroup.POST("", controller.Create)
-		householdGroup.GET("/:id", controller.GetByID)
+		householdGroup.GET("/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromParam("id")),
+			controller.GetByID)
 		householdGroup.PUT("/:id", controller.Update)
 		householdGroup.DELETE("/:id", controller.Delete)
 		householdGroup.POST("/:id/members", controller.AddMember)

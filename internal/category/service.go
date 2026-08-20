@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Service handles category business logic.
+// Service handles category business logic scoped to households.
 type Service struct {
 	db *gorm.DB
 }
@@ -29,10 +29,11 @@ func NewService(db *gorm.DB) *Service {
 	}
 }
 
-// Create adds a new category.
-func (s *Service) Create(req *CreateRequest) (*Category, error) {
+// Create adds a new category within a household.
+func (s *Service) Create(householdID uint, req *CreateRequest) (*Category, error) {
 	category := Category{
-		Name: req.Name,
+		HouseholdID: householdID,
+		Name:        req.Name,
 	}
 
 	if err := s.db.Create(&category).Error; err != nil {
@@ -42,10 +43,10 @@ func (s *Service) Create(req *CreateRequest) (*Category, error) {
 	return &category, nil
 }
 
-// GetByID retrieves a category by ID.
-func (s *Service) GetByID(id uint) (*Category, error) {
+// GetByID retrieves a category by ID, scoped to household.
+func (s *Service) GetByID(id, householdID uint) (*Category, error) {
 	var category Category
-	if err := s.db.First(&category, id).Error; err != nil {
+	if err := s.db.Where("id = ? AND household_id = ?", id, householdID).First(&category).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("category not found")
 		}
@@ -54,19 +55,19 @@ func (s *Service) GetByID(id uint) (*Category, error) {
 	return &category, nil
 }
 
-// List retrieves all categories.
-func (s *Service) List() ([]Category, error) {
+// List retrieves all categories for a household.
+func (s *Service) List(householdID uint) ([]Category, error) {
 	var categories []Category
-	if err := s.db.Order("name ASC").Find(&categories).Error; err != nil {
+	if err := s.db.Where("household_id = ?", householdID).Order("name ASC").Find(&categories).Error; err != nil {
 		return nil, fmt.Errorf("failed to list categories: %w", err)
 	}
 	return categories, nil
 }
 
-// Update updates an existing category.
-func (s *Service) Update(id uint, req *UpdateRequest) (*Category, error) {
+// Update updates an existing category within a household.
+func (s *Service) Update(id, householdID uint, req *UpdateRequest) (*Category, error) {
 	var category Category
-	if err := s.db.First(&category, id).Error; err != nil {
+	if err := s.db.Where("id = ? AND household_id = ?", id, householdID).First(&category).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("category not found")
 		}
@@ -84,10 +85,10 @@ func (s *Service) Update(id uint, req *UpdateRequest) (*Category, error) {
 	return &category, nil
 }
 
-// Delete removes a category. Shopping items assigned to it will have category_id set to NULL.
-func (s *Service) Delete(id uint) error {
+// Delete removes a category within a household.
+func (s *Service) Delete(id, householdID uint) error {
 	var category Category
-	if err := s.db.First(&category, id).Error; err != nil {
+	if err := s.db.Where("id = ? AND household_id = ?", id, householdID).First(&category).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("category not found")
 		}

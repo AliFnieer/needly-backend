@@ -16,16 +16,30 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, ca
 	service := NewService(db, cache, historySvc, notificationSvc)
 	controller := NewController(service)
 
-	// All shopping item routes require authentication
+	// All shopping item routes require authentication + household membership
 	itemRoutes := router.Group("")
 	itemRoutes.Use(middleware.AuthMiddleware(cfg))
 	{
-		itemRoutes.POST("/lists/:id/items", controller.Create)
-		itemRoutes.GET("/lists/:id/items", controller.List)
-		itemRoutes.GET("/items/:id", controller.GetByID)
-		itemRoutes.PUT("/items/:id", controller.Update)
-		itemRoutes.PATCH("/items/:id/completed", controller.SetCompleted)
-		itemRoutes.DELETE("/items/:id", controller.Delete)
-		itemRoutes.POST("/history/:id/re-add", controller.ReAddFromHistory)
+		itemRoutes.POST("/lists/:id/items",
+			middleware.RequireMembership(db, middleware.HouseholdFromList(db)),
+			controller.Create)
+		itemRoutes.GET("/lists/:id/items",
+			middleware.RequireMembership(db, middleware.HouseholdFromList(db)),
+			controller.List)
+		itemRoutes.GET("/items/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromItem(db)),
+			controller.GetByID)
+		itemRoutes.PUT("/items/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromItem(db)),
+			controller.Update)
+		itemRoutes.PATCH("/items/:id/completed",
+			middleware.RequireMembership(db, middleware.HouseholdFromItem(db)),
+			controller.SetCompleted)
+		itemRoutes.DELETE("/items/:id",
+			middleware.RequireMembership(db, middleware.HouseholdFromItem(db)),
+			controller.Delete)
+		itemRoutes.POST("/history/:id/re-add",
+			middleware.RequireMembership(db, middleware.HouseholdFromHistory(db)),
+			controller.ReAddFromHistory)
 	}
 }

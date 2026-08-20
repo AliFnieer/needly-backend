@@ -7,19 +7,20 @@ import (
 	"gorm.io/gorm"
 )
 
-// RegisterRoutes registers category routes on the given router group.
+// RegisterRoutes registers category routes scoped to a household.
 func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	service := NewService(db)
 	controller := NewController(service)
 
-	// All category routes require authentication
-	categoryGroup := router.Group("/categories")
+	// Categories are scoped to a household and require membership
+	categoryGroup := router.Group("/households/:id/categories")
 	categoryGroup.Use(middleware.AuthMiddleware(cfg))
+	categoryGroup.Use(middleware.RequireMembership(db, middleware.HouseholdFromParam("id")))
 	{
 		categoryGroup.GET("", controller.List)
 		categoryGroup.POST("", controller.Create)
-		categoryGroup.GET("/:id", controller.GetByID)
-		categoryGroup.PUT("/:id", controller.Update)
-		categoryGroup.DELETE("/:id", controller.Delete)
+		categoryGroup.GET("/:categoryId", controller.GetByID)
+		categoryGroup.PUT("/:categoryId", controller.Update)
+		categoryGroup.DELETE("/:categoryId", controller.Delete)
 	}
 }
