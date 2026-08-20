@@ -2,7 +2,6 @@ package auth
 
 import (
 	"testing"
-	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"gorm.io/driver/sqlite"
@@ -23,7 +22,7 @@ func testServiceConfig() *config.Config {
 
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"+time.Now().String()), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger:                 logger.Default.LogMode(logger.Silent),
 		SkipDefaultTransaction: true,
 	})
