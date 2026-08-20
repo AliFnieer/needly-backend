@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/redis/go-redis/v9"
@@ -90,14 +90,14 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client.ID] = client
 			h.mu.Unlock()
-			log.Printf("websocket client connected: %s", client.ID)
+			slog.Info("websocket client connected", "id", client.ID)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client.ID]; ok {
 				delete(h.clients, client.ID)
 				close(client.Send)
-				log.Printf("websocket client disconnected: %s", client.ID)
+				slog.Info("websocket client disconnected", "id", client.ID)
 			}
 			h.mu.Unlock()
 
@@ -106,12 +106,12 @@ func (h *Hub) Run() {
 			h.deliverToHousehold(msg.HouseholdID, msg.Message)
 			if h.pubsub != nil {
 				if err := h.pubsub.PublishHousehold(h.ctx, h.instanceID, msg.HouseholdID, msg.Message); err != nil {
-					log.Printf("websocket pubsub: failed to publish household broadcast: %v", err)
+					slog.Error("websocket pubsub publish household failed", "error", err)
 				}
 			}
 
 		case <-h.ctx.Done():
-			log.Printf("websocket hub shutting down")
+			slog.Info("websocket hub shutting down")
 			return
 		}
 	}
@@ -131,7 +131,7 @@ func (h *Hub) handlePubSubMessage(msg PubSubMessage) {
 	case MessageTypeClient:
 		h.deliverToClient(msg.ClientID, msg.Message)
 	default:
-		log.Printf("websocket pubsub: unknown message type %q", msg.Type)
+		slog.Warn("websocket pubsub unknown message type", "type", msg.Type)
 	}
 }
 
@@ -190,7 +190,7 @@ func (h *Hub) BroadcastToClient(clientID string, message []byte) {
 	h.deliverToClient(clientID, message)
 	if h.pubsub != nil {
 		if err := h.pubsub.PublishClient(h.ctx, h.instanceID, clientID, message); err != nil {
-			log.Printf("websocket pubsub: failed to publish client message: %v", err)
+			slog.Error("websocket pubsub publish client failed", "error", err)
 		}
 	}
 }

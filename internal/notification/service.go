@@ -3,7 +3,7 @@ package notification
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/config"
@@ -51,7 +51,7 @@ func (s *Service) NotifyHousehold(ctx context.Context, n *Notification) error {
 	// Deliver in real time over the WebSocket hub.
 	if s.cfg.WebSocketEnabled && s.hub != nil {
 		if err := s.broadcastToHousehold(n); err != nil {
-			log.Printf("notification: failed to broadcast notification: %v", err)
+			slog.Error("notification broadcast failed", "error", err)
 		}
 	}
 
@@ -120,7 +120,7 @@ func (s *Service) storeHistory(ctx context.Context, n *Notification) {
 
 	items, err := s.HistoryByHousehold(ctx, n.HouseholdID)
 	if err != nil {
-		log.Printf("notification: failed to read history for household %d: %v", n.HouseholdID, err)
+		slog.Error("notification history read failed", "household_id", n.HouseholdID, "error", err)
 		items = []*Notification{}
 	}
 
@@ -131,12 +131,12 @@ func (s *Service) storeHistory(ctx context.Context, n *Notification) {
 
 	data, err := json.Marshal(items)
 	if err != nil {
-		log.Printf("notification: failed to marshal history for household %d: %v", n.HouseholdID, err)
+		slog.Error("notification history marshal failed", "household_id", n.HouseholdID, "error", err)
 		return
 	}
 
 	if err := s.redis.Set(ctx, key, data, 24*time.Hour).Err(); err != nil {
-		log.Printf("notification: failed to store history for household %d: %v", n.HouseholdID, err)
+		slog.Error("notification history store failed", "household_id", n.HouseholdID, "error", err)
 	}
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,12 +20,22 @@ func main() {
 
 	db, err := database.InitPostgres(cfg)
 	if err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
+	}
+
+	// Run SQL migrations in production mode
+	if cfg.Server.GinMode == "release" {
+		if err := database.RunMigrations(db, "migrations"); err != nil {
+			slog.Error("failed to run migrations", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	redisClient, err := cache.InitRedis(cfg)
 	if err != nil {
-		log.Fatalf("failed to initialize redis: %v", err)
+		slog.Error("failed to initialize redis", "error", err)
+		os.Exit(1)
 	}
 	defer redisClient.Close()
 
@@ -43,9 +52,21 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		slog.Info("server starting", "addr", httpServer.Addr, "mode", cfg.Server.GinMode)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server failed to start", "error", err)
-			os.Exit(1)
+
+		tlsCert := os.Getenv("TLS_CERT_FILE")
+		tlsKey := os.Getenv("TLS_KEY_FILE")
+
+		if tlsCert != "" && tlsKey != "" {
+			slog.Info("TLS enabled", "cert", tlsCert, "key", tlsKey)
+			if err := httpServer.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
+				slog.Error("TLS server failed", "error", err)
+				os.Exit(1)
+			}
+		} else {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("server failed to start", "error", err)
+				os.Exit(1)
+			}
 		}
 	}()
 

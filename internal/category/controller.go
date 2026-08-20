@@ -1,7 +1,7 @@
 package category
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -90,7 +90,7 @@ func (ctl *Controller) List(c *gin.Context) {
 
 	categories, err := ctl.service.List(householdID)
 	if err != nil {
-		log.Printf("category list: %v", err)
+		slog.Error("category list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}

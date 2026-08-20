@@ -3,7 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -88,7 +88,7 @@ func (p *PubSub) Subscribe(ctx context.Context, handler func(PubSubMessage)) {
 			sub := p.client.Subscribe(ctx, wsEventsChannel)
 			ch := sub.Channel()
 
-			log.Printf("websocket pubsub subscribed to channel %s", wsEventsChannel)
+			slog.Info("websocket pubsub subscribed", "channel", wsEventsChannel)
 
 			for {
 				select {
@@ -102,7 +102,7 @@ func (p *PubSub) Subscribe(ctx context.Context, handler func(PubSubMessage)) {
 					}
 					var envelope PubSubMessage
 					if err := json.Unmarshal([]byte(msg.Payload), &envelope); err != nil {
-						log.Printf("websocket pubsub: failed to unmarshal message: %v", err)
+						slog.Error("websocket pubsub unmarshal failed", "error", err)
 						continue
 					}
 					handler(envelope)
@@ -111,7 +111,7 @@ func (p *PubSub) Subscribe(ctx context.Context, handler func(PubSubMessage)) {
 
 		reconnect:
 			_ = sub.Close()
-			log.Printf("websocket pubsub: subscription lost, reconnecting in %s", pubSubReconnectDelay)
+			slog.Warn("websocket pubsub subscription lost, reconnecting", "delay", pubSubReconnectDelay)
 			select {
 			case <-ctx.Done():
 				return
