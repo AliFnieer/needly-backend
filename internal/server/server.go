@@ -160,13 +160,9 @@ func (s *Server) setupRoutes() {
 		c.JSON(httpStatus, status)
 	})
 
-	isRelease := s.cfg.Server.GinMode == gin.ReleaseMode
-
-	// Internal observability endpoints — protected in release mode
+	// Internal observability endpoints — always protected by auth
 	internal := s.engine.Group("")
-	if isRelease {
-		internal.Use(middleware.AuthMiddleware(s.cfg))
-	}
+	internal.Use(middleware.AuthMiddleware(s.cfg))
 	{
 		// Metrics endpoint
 		internal.GET("/metrics", gin.WrapH(s.metrics.MetricsHandler()))

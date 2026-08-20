@@ -50,9 +50,12 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 
 		allowed, remaining, retryAfter, err := rl.allow(c.Request.Context(), key)
 		if err != nil {
-			// Fail open when Redis is unavailable so traffic is not blocked.
+			// Fail closed when Redis is unavailable to prevent abuse.
 			log.Printf("rate limit: redis error for key %s: %v", key, err)
-			c.Next()
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "service temporarily unavailable",
+			})
+			c.Abort()
 			return
 		}
 
