@@ -135,10 +135,10 @@ func (s *Server) setupRoutes() {
 		// Check database
 		sqlDB, err := s.db.DB()
 		if err != nil {
-			status["database"] = "error: " + err.Error()
+			status["database"] = "error"
 			healthy = false
 		} else if err := sqlDB.PingContext(ctx); err != nil {
-			status["database"] = "error: " + err.Error()
+			status["database"] = "error"
 			healthy = false
 		} else {
 			status["database"] = "ok"
@@ -146,7 +146,7 @@ func (s *Server) setupRoutes() {
 
 		// Check Redis
 		if err := s.redis.Ping(ctx).Err(); err != nil {
-			status["redis"] = "error: " + err.Error()
+			status["redis"] = "error"
 			healthy = false
 		} else {
 			status["redis"] = "ok"

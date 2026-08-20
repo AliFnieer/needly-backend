@@ -153,7 +153,7 @@ func (s *Service) Refresh(req *RefreshRequest) (*AuthResponse, error) {
 func (s *Service) Logout(userID uint, req *LogoutRequest) error {
 	if req != nil && req.RefreshToken != "" {
 		tokenHash := hashToken(req.RefreshToken)
-		result := s.db.Where("user_id = ? AND token_hash = ?", userID, tokenHash).
+		result := s.db.Model(&RefreshToken{}).Where("user_id = ? AND token_hash = ?", userID, tokenHash).
 			Update("revoked_at", time.Now())
 		if result.Error != nil {
 			return fmt.Errorf("failed to revoke refresh token: %w", result.Error)
