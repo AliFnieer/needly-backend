@@ -93,18 +93,13 @@ func (s *Service) GetByID(id uint) (*Household, error) {
 
 // ListByUser retrieves all households the user is a member of.
 func (s *Service) ListByUser(userID uint) ([]Household, error) {
-	var memberships []HouseholdMember
-	if err := s.db.Where("user_id = ?", userID).Find(&memberships).Error; err != nil {
-		return nil, fmt.Errorf("failed to list memberships: %w", err)
-	}
-
 	var households []Household
-	for _, membership := range memberships {
-		var household Household
-		if err := s.db.Preload("Members").First(&household, membership.HouseholdID).Error; err != nil {
-			return nil, fmt.Errorf("failed to get household %d: %w", membership.HouseholdID, err)
-		}
-		households = append(households, household)
+	if err := s.db.
+		Preload("Members").
+		Joins("JOIN household_members ON household_members.household_id = households.id").
+		Where("household_members.user_id = ?", userID).
+		Find(&households).Error; err != nil {
+		return nil, fmt.Errorf("failed to list households for user: %w", err)
 	}
 
 	return households, nil

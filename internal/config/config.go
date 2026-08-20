@@ -27,13 +27,16 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
-	TimeZone string
+	Host                   string
+	Port                   string
+	User                   string
+	Password               string
+	Name                   string
+	SSLMode                string
+	TimeZone               string
+	MaxOpenConns           int
+	MaxIdleConns           int
+	ConnMaxLifetimeMinutes int
 }
 
 type RedisConfig struct {
@@ -90,13 +93,16 @@ func Load() *Config {
 			GinMode: getEnv("GIN_MODE", "debug"),
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
-			Name:     getEnv("DB_NAME", "needly"),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
-			TimeZone: getEnv("DB_TIMEZONE", "Africa/Tripoli"),
+			Host:                   getEnv("DB_HOST", "localhost"),
+			Port:                   getEnv("DB_PORT", "5432"),
+			User:                   getEnv("DB_USER", "postgres"),
+			Password:               getEnv("DB_PASSWORD", "postgres"),
+			Name:                   getEnv("DB_NAME", "needly"),
+			SSLMode:                getEnv("DB_SSLMODE", "disable"),
+			TimeZone:               getEnv("DB_TIMEZONE", "Africa/Tripoli"),
+			MaxOpenConns:           getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:           getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetimeMinutes: getEnvAsInt("DB_CONN_MAX_LIFETIME_MINUTES", 5),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),
