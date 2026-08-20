@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Needly API",
-    "description": "Backend API for Needly, a real-time shared shopping and household coordination application.",
+    "description": "Backend API for Needly, a real-time shared shopping and household coordination application.\n\nThe server supports TLS when started with `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables set.\n\nAll requests may include an `API-Version` header (e.g. `API-Version: 1`) to pin to a specific API version. If omitted, the latest version is used.",
     "version": "1.0.0",
     "contact": {
       "name": "Needly Backend",
@@ -156,6 +156,7 @@
       "post": {
         "tags": ["Auth"],
         "summary": "Register a new user",
+        "description": "Rate limited: 10 requests per minute per IP.",
         "operationId": "registerUser",
         "requestBody": {
           "required": true,
@@ -205,6 +206,7 @@
       "post": {
         "tags": ["Auth"],
         "summary": "Log in a user",
+        "description": "Rate limited: 10 requests per minute per IP.",
         "operationId": "loginUser",
         "requestBody": {
           "required": true,
@@ -254,6 +256,7 @@
       "post": {
         "tags": ["Auth"],
         "summary": "Refresh access token",
+        "description": "Rate limited: 10 requests per minute per IP.",
         "operationId": "refreshToken",
         "requestBody": {
           "required": true,
@@ -1378,14 +1381,24 @@
         }
       }
     },
-    "/api/v1/categories": {
+    "/api/v1/households/{hid}/categories": {
       "get": {
         "tags": ["Categories"],
-        "summary": "List all categories",
-        "operationId": "listCategories",
+        "summary": "List categories for a household",
+        "operationId": "listHouseholdCategories",
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "hid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -1416,11 +1429,21 @@
       },
       "post": {
         "tags": ["Categories"],
-        "summary": "Create a category",
-        "operationId": "createCategory",
+        "summary": "Create a category in a household",
+        "operationId": "createHouseholdCategory",
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "hid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "requestBody": {
@@ -1467,7 +1490,7 @@
         }
       }
     },
-    "/api/v1/categories/{id}": {
+    "/api/v1/households/{hid}/categories/{id}": {
       "get": {
         "tags": ["Categories"],
         "summary": "Get category by ID",
@@ -1478,6 +1501,14 @@
           }
         ],
         "parameters": [
+          {
+            "name": "hid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
           {
             "name": "id",
             "in": "path",
@@ -1530,6 +1561,14 @@
           }
         ],
         "parameters": [
+          {
+            "name": "hid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
           {
             "name": "id",
             "in": "path",
@@ -1592,6 +1631,14 @@
           }
         ],
         "parameters": [
+          {
+            "name": "hid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
           {
             "name": "id",
             "in": "path",
@@ -2377,6 +2424,9 @@
         "type": "object",
         "properties": {
           "id": {
+            "type": "integer"
+          },
+          "household_id": {
             "type": "integer"
           },
           "name": {

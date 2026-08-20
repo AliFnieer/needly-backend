@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: needly-api
+  namespace: needly
+  labels:
+    app: needly
+    component: api
+spec:
+  type: ClusterIP
+  selector:
+    app: needly
+    component: api
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http

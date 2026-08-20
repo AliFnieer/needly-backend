@@ -59,19 +59,20 @@ All configuration is loaded from environment variables at startup. Values can al
 
 ## Rate Limiting
 
-Redis-backed fixed-window rate limiter. Applied globally to all API endpoints.
+Redis-backed fixed-window rate limiter. Applied globally to all API endpoints with stricter limits for auth endpoints.
 
 | Variable                    | Type | Default | Required | Description                                                                 | Example |
 | --------------------------- | ---- | ------- | -------- | --------------------------------------------------------------------------- | ------- |
 | `RATE_LIMIT_ENABLED`       | bool | `true`  | no       | Enable or disable rate limiting entirely.                                    | `true`  |
-| `RATE_LIMIT_REQUESTS`      | int  | `100`   | no       | Maximum number of requests per window.                                       | `100`   |
+| `RATE_LIMIT_REQUESTS`      | int  | `100`   | no       | Maximum number of requests per window for general API endpoints.            | `100`   |
 | `RATE_LIMIT_WINDOW_SECONDS`| int  | `60`    | no       | Rate limit window duration in seconds.                                       | `60`    |
 
 ### How rate limiting works
 
 - **Authenticated users**: keyed by `user:<id>` — each user gets their own limit.
 - **Unauthenticated requests**: keyed by `ip:<client_ip>` — per-IP limit.
-- **Redis failure**: the limiter fails open — requests are allowed through if Redis is unavailable.
+- **Auth endpoints** (`/auth/register`, `/auth/login`, `/auth/refresh`): limited to **10 requests per minute** (hardcoded strict limit).
+- **Redis failure**: the limiter **fails closed** — returns 503 if Redis is unavailable.
 - **Response headers**: every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` (when limited).
 
 ---
@@ -85,6 +86,29 @@ Controls push notification delivery and WebSocket notification behavior.
 | `NOTIFICATIONS_ENABLED`        | bool | `true`  | no       | Enable push notification system.                                               | `true`  |
 | `NOTIFICATIONS_WEBSOCKET_ENABLED` | bool | `true` | no    | Enable WebSocket-based real-time notification delivery.                        | `true`  |
 | `NOTIFICATIONS_HISTORY_LIMIT`  | int  | `50`    | no       | Maximum number of notification history entries kept per household in Redis.    | `50`    |
+
+---
+
+## TLS (Optional)
+
+When both variables are set, the server starts with HTTPS using `ListenAndServeTLS`. When empty, plain HTTP is used.
+
+| Variable         | Type   | Default | Required | Description                                  | Example                    |
+| ---------------- | ------ | ------- | -------- | -------------------------------------------- | -------------------------- |
+| `TLS_CERT_FILE`  | string | `""`    | no       | Path to the TLS certificate file (PEM).      | `/etc/letsencrypt/live/api.needly.com/fullchain.pem` |
+| `TLS_KEY_FILE`   | string | `""`    | no       | Path to the TLS private key file (PEM).      | `/etc/letsencrypt/live/api.needly.com/privkey.pem`   |
+
+---
+
+## Database Connection Pool
+
+These variables control the database connection pool for production tuning.
+
+| Variable                        | Type | Default | Required | Description                                              | Example |
+| ------------------------------- | ---- | ------- | -------- | -------------------------------------------------------- | ------- |
+| `DB_MAX_OPEN_CONNS`            | int  | `25`    | no       | Maximum number of open database connections.              | `25`    |
+| `DB_MAX_IDLE_CONNS`            | int  | `5`     | no       | Maximum number of idle database connections.              | `5`     |
+| `DB_CONN_MAX_LIFETIME_MINUTES` | int  | `5`     | no       | Maximum lifetime of a connection in minutes.              | `5`     |
 
 ---
 
@@ -130,6 +154,15 @@ RATE_LIMIT_WINDOW_SECONDS=60
 NOTIFICATIONS_ENABLED=true
 NOTIFICATIONS_WEBSOCKET_ENABLED=true
 NOTIFICATIONS_HISTORY_LIMIT=50
+
+# TLS (optional — use when not behind nginx/ALB)
+# TLS_CERT_FILE=/etc/letsencrypt/live/api.needly.com/fullchain.pem
+# TLS_KEY_FILE=/etc/letsencrypt/live/api.needly.com/privkey.pem
+
+# Database connection pool
+DB_MAX_OPEN_CONNS=25
+DB_MAX_IDLE_CONNS=5
+DB_CONN_MAX_LIFETIME_MINUTES=5
 ```
 
 ### Generating a secure JWT secret
@@ -170,3 +203,8 @@ This produces a 64-character hex string suitable for `JWT_SECRET`.
 | `NOTIFICATIONS_ENABLED`        | `true`                                  |
 | `NOTIFICATIONS_WEBSOCKET_ENABLED` | `true`                               |
 | `NOTIFICATIONS_HISTORY_LIMIT`  | `50`                                    |
+| `TLS_CERT_FILE`               | `""` (empty, plain HTTP)                |
+| `TLS_KEY_FILE`                | `""` (empty, plain HTTP)                |
+| `DB_MAX_OPEN_CONNS`           | `25`                                    |
+| `DB_MAX_IDLE_CONNS`           | `5`                                     |
+| `DB_CONN_MAX_LIFETIME_MINUTES`| `5`                                     |

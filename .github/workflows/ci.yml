@@ -7,9 +7,64 @@ on:
     branches: [main, dev]
 
 env:
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.25"
 
 jobs:
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dependency summary
+        run: |
+          echo "### Dependency Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Update type | ${{ steps.metadata.outputs.update-type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency | ${{ steps.metadata.outputs.dependency-name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Previous version | ${{ steps.metadata.outputs.previous-version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| New version | ${{ steps.metadata.outputs.new-version }} |" >> $GITHUB_STEP_SUMMARY
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run Gosec security scanner
+        uses: securego/gosec@master
+        with:
+          args: -exclude-generated ./...
+
+      - name: Gosec summary
+        if: always()
+        run: |
+          echo "### Security Scan Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Gosec scan finished for the repository." >> $GITHUB_STEP_SUMMARY
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -116,14 +171,25 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Build binary
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build binaries
         run: |
           CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o needly-api ./cmd/api
           CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o needly-seed ./cmd/seed
 
-      - name: Verify binary
+      - name: Verify binaries
         run: |
           file needly-api
+          file needly-seed
           ./needly-api --help 2>&1 || true
 
       - name: Upload build artifacts

@@ -252,7 +252,9 @@ Auto-migrations run on server startup when `GIN_MODE` is not `release`. No manua
 
 ### Production
 
-Auto-migrations are **skipped** in production mode. Use the `migrate` CLI:
+Auto-migrations are **skipped** in production mode. The server now **automatically applies pending SQL migrations** on startup using `database.RunMigrations()`. Migrations are tracked in a `migrations` table.
+
+You can also use the `migrate` CLI manually:
 
 ```bash
 # Install migrate CLI (if not installed)
@@ -283,6 +285,7 @@ The `migrations/` directory contains numbered SQL files (goose format):
 000008_create_shopping_history.sql
 000009_create_refresh_tokens.sql
 000010_add_performance_indexes.sql
+000011_scope_categories_to_households.sql
 ```
 
 ### Before deploying a new version
@@ -350,7 +353,20 @@ The `api` container should show `healthy` after the start period.
 
 ## SSL/TLS with Nginx Reverse Proxy
 
-### Install nginx
+### Option A: Native TLS (without nginx)
+
+Set the `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables to enable HTTPS directly:
+
+```bash
+export TLS_CERT_FILE=/etc/letsencrypt/live/api.needly.com/fullchain.pem
+export TLS_KEY_FILE=/etc/letsencrypt/live/api.needly.com/privkey.pem
+```
+
+The server will automatically start with `ListenAndServeTLS` instead of `ListenAndServe`.
+
+### Option B: Nginx Reverse Proxy (recommended for production)
+
+#### Install nginx
 
 ```bash
 # Ubuntu/Debian
@@ -465,11 +481,13 @@ Expected: HTTP 200 with `Strict-Transport-Security` header present.
 - [ ] `JWT_SECRET` is a strong random value (not the default)
 - [ ] `DB_PASSWORD` is a strong random value
 - [ ] `REDIS_PASSWORD` is set
-- [ ] Database migrations have been applied
-- [ ] `GET /health` returns `{"status":"ok"}`
-- [ ] SSL certificate is valid and auto-renewing
+- [ ] Database migrations have been applied (auto-runs on startup, or via CLI)
+- [ ] `GET /health` returns `{"status":"ok","database":"ok","redis":"ok"}`
+- [ ] SSL certificate is valid and auto-renewing (nginx or native TLS)
 - [ ] nginx is proxying WebSocket connections correctly
 - [ ] `CORS_ALLOWED_ORIGINS` includes only production domains
 - [ ] PostgreSQL and Redis ports are not exposed to the public internet
 - [ ] Docker containers are running as non-root
 - [ ] Log aggregation is configured (CloudWatch, Datadog, etc.)
+- [ ] Auth endpoints rate limit is active (10 req/min strict limit)
+- [ ] API-Version header is enforced for client requests
