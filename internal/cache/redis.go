@@ -25,7 +25,7 @@ func InitRedis(cfg *config.Config) (*redis.Client, error) {
 
 	// Verify connection
 	if err := client.Ping(ctx).Err(); err != nil {
-		client.Close()
+		_ = client.Close() // #nosec G104 - best-effort cleanup on error
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
