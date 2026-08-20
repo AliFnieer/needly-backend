@@ -267,3 +267,56 @@ func (s *Service) checkOwner(householdID, userID uint) error {
 
 	return nil
 }
+
+// CheckMember verifies that a user is a member of the given household.
+func (s *Service) CheckMember(householdID, userID uint) bool {
+	var count int64
+	s.db.Model(&HouseholdMember{}).
+		Where("household_id = ? AND user_id = ?", householdID, userID).
+		Count(&count)
+	return count > 0
+}
+
+// HouseholdIDForList resolves the household ID that owns a shopping list.
+func (s *Service) HouseholdIDForList(listID uint) (uint, error) {
+	var result struct {
+		HouseholdID uint
+	}
+	if err := s.db.Table("shopping_lists").
+		Select("household_id").
+		Where("id = ?", listID).
+		Scan(&result).Error; err != nil {
+		return 0, fmt.Errorf("failed to resolve household for list: %w", err)
+	}
+	return result.HouseholdID, nil
+}
+
+// HouseholdIDForItem resolves the household ID that owns a shopping item (via its list).
+func (s *Service) HouseholdIDForItem(itemID uint) (uint, error) {
+	var result struct {
+		HouseholdID uint
+	}
+	if err := s.db.Table("shopping_items").
+		Joins("JOIN shopping_lists ON shopping_lists.id = shopping_items.list_id").
+		Select("shopping_lists.household_id").
+		Where("shopping_items.id = ?", itemID).
+		Scan(&result).Error; err != nil {
+		return 0, fmt.Errorf("failed to resolve household for item: %w", err)
+	}
+	return result.HouseholdID, nil
+}
+
+// HouseholdIDForHistory resolves the household ID that owns a history entry (via its list).
+func (s *Service) HouseholdIDForHistory(historyID uint) (uint, error) {
+	var result struct {
+		HouseholdID uint
+	}
+	if err := s.db.Table("shopping_history").
+		Joins("JOIN shopping_lists ON shopping_lists.id = shopping_history.list_id").
+		Select("shopping_lists.household_id").
+		Where("shopping_history.id = ?", historyID).
+		Scan(&result).Error; err != nil {
+		return 0, fmt.Errorf("failed to resolve household for history: %w", err)
+	}
+	return result.HouseholdID, nil
+}
