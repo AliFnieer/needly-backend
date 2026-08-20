@@ -18,6 +18,7 @@ type Config struct {
 	CORS         CORSConfig
 	RateLimit    RateLimitConfig
 	Notification NotificationConfig
+	Tracing      TracingConfig
 }
 
 type ServerConfig struct {
@@ -65,6 +66,12 @@ type NotificationConfig struct {
 	Enabled          bool
 	WebSocketEnabled bool
 	HistoryLimit     int
+}
+
+// TracingConfig configures distributed tracing export.
+type TracingConfig struct {
+	JaegerEndpoint string
+	ServiceName    string
 }
 
 const (
@@ -115,6 +122,10 @@ func Load() *Config {
 			Enabled:          getEnvAsBool("NOTIFICATIONS_ENABLED", true),
 			WebSocketEnabled: getEnvAsBool("NOTIFICATIONS_WEBSOCKET_ENABLED", true),
 			HistoryLimit:     getEnvAsInt("NOTIFICATIONS_HISTORY_LIMIT", 50),
+		},
+		Tracing: TracingConfig{
+			JaegerEndpoint: getEnv("JAEGER_ENDPOINT", ""),
+			ServiceName:    getEnv("JAEGER_SERVICE_NAME", "needly-api"),
 		},
 	}
 
