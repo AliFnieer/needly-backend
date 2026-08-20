@@ -1,6 +1,7 @@
 package shoppingitem_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/AliFnieer/needly-backend/internal/category"
@@ -40,6 +41,7 @@ func TestCreate_NilCategory(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
 	req := &shoppingitem.CreateRequest{
 		Name:     "Milk",
@@ -47,7 +49,7 @@ func TestCreate_NilCategory(t *testing.T) {
 		Unit:     "liters",
 	}
 
-	item, err := svc.Create(listID, user.ID, req)
+	item, err := svc.Create(ctx, listID, user.ID, req)
 	require.NoError(t, err)
 	assert.NotZero(t, item.ID)
 	assert.Equal(t, listID, item.ListID)
@@ -66,6 +68,7 @@ func TestCreate_WithValidCategory(t *testing.T) {
 	catID := seedCategory(t, db, 1)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
 	req := &shoppingitem.CreateRequest{
 		Name:       "Bread",
@@ -74,7 +77,7 @@ func TestCreate_WithValidCategory(t *testing.T) {
 		CategoryID: &catID,
 	}
 
-	item, err := svc.Create(listID, user.ID, req)
+	item, err := svc.Create(ctx, listID, user.ID, req)
 	require.NoError(t, err)
 	require.NotNil(t, item.CategoryID)
 	assert.Equal(t, catID, *item.CategoryID)
@@ -86,6 +89,7 @@ func TestCreate_NonexistentCategory(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
 	fakeID := uint(9999)
 	req := &shoppingitem.CreateRequest{
@@ -93,7 +97,7 @@ func TestCreate_NonexistentCategory(t *testing.T) {
 		CategoryID: &fakeID,
 	}
 
-	_, err := svc.Create(listID, user.ID, req)
+	_, err := svc.Create(ctx, listID, user.ID, req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "category not found")
 }
@@ -104,12 +108,13 @@ func TestGetByID(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
 	createReq := &shoppingitem.CreateRequest{Name: "Butter", Quantity: 1}
-	created, err := svc.Create(listID, user.ID, createReq)
+	created, err := svc.Create(ctx, listID, user.ID, createReq)
 	require.NoError(t, err)
 
-	got, err := svc.GetByID(created.ID)
+	got, err := svc.GetByID(ctx, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, got.ID)
 	assert.Equal(t, "Butter", got.Name)
@@ -118,8 +123,9 @@ func TestGetByID(t *testing.T) {
 func TestGetByID_NotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	_, err := svc.GetByID(9999)
+	_, err := svc.GetByID(ctx, 9999)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -130,11 +136,12 @@ func TestListByListID(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Item A"})
-	svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Item B"})
+	svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item A"})
+	svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item B"})
 
-	items, err := svc.ListByListID(listID)
+	items, err := svc.ListByListID(ctx, listID)
 	require.NoError(t, err)
 	assert.Len(t, items, 2)
 }
@@ -142,8 +149,9 @@ func TestListByListID(t *testing.T) {
 func TestListByListID_Empty(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	items, err := svc.ListByListID(9999)
+	items, err := svc.ListByListID(ctx, 9999)
 	require.NoError(t, err)
 	assert.Empty(t, items)
 }
@@ -154,8 +162,9 @@ func TestUpdate(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	created, err := svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Old Name", Quantity: 1})
+	created, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Old Name", Quantity: 1})
 	require.NoError(t, err)
 
 	newQty := float64(5)
@@ -167,7 +176,7 @@ func TestUpdate(t *testing.T) {
 		IsCompleted: &comp,
 	}
 
-	updated, err := svc.Update(created.ID, user.ID, updateReq)
+	updated, err := svc.Update(ctx, created.ID, user.ID, updateReq)
 	require.NoError(t, err)
 	assert.Equal(t, "New Name", updated.Name)
 	assert.Equal(t, float64(5), updated.Quantity)
@@ -182,13 +191,14 @@ func TestUpdate_CategoryClear(t *testing.T) {
 	catID := seedCategory(t, db, 1)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	created, err := svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Item", CategoryID: &catID})
+	created, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item", CategoryID: &catID})
 	require.NoError(t, err)
 	require.NotNil(t, created.CategoryID)
 
 	clearID := uint(0)
-	updated, err := svc.Update(created.ID, user.ID, &shoppingitem.UpdateRequest{CategoryID: &clearID})
+	updated, err := svc.Update(ctx, created.ID, user.ID, &shoppingitem.UpdateRequest{CategoryID: &clearID})
 	require.NoError(t, err)
 	assert.Nil(t, updated.CategoryID)
 }
@@ -196,9 +206,10 @@ func TestUpdate_CategoryClear(t *testing.T) {
 func TestUpdate_NotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
 	name := "nope"
-	_, err := svc.Update(9999, 1, &shoppingitem.UpdateRequest{Name: name})
+	_, err := svc.Update(ctx, 9999, 1, &shoppingitem.UpdateRequest{Name: name})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -209,16 +220,17 @@ func TestUpdateCompleted(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	created, err := svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Cheese"})
+	created, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Cheese"})
 	require.NoError(t, err)
 	assert.False(t, created.IsCompleted)
 
-	updated, err := svc.UpdateCompleted(created.ID, user.ID, true)
+	updated, err := svc.UpdateCompleted(ctx, created.ID, user.ID, true)
 	require.NoError(t, err)
 	assert.True(t, updated.IsCompleted)
 
-	updated2, err := svc.UpdateCompleted(created.ID, user.ID, false)
+	updated2, err := svc.UpdateCompleted(ctx, created.ID, user.ID, false)
 	require.NoError(t, err)
 	assert.False(t, updated2.IsCompleted)
 }
@@ -229,11 +241,12 @@ func TestUpdateCompleted_NilHistory_NoPanic(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	created, err := svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Yogurt"})
+	created, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Yogurt"})
 	require.NoError(t, err)
 
-	updated, err := svc.UpdateCompleted(created.ID, user.ID, true)
+	updated, err := svc.UpdateCompleted(ctx, created.ID, user.ID, true)
 	require.NoError(t, err)
 	assert.True(t, updated.IsCompleted)
 }
@@ -241,8 +254,9 @@ func TestUpdateCompleted_NilHistory_NoPanic(t *testing.T) {
 func TestUpdateCompleted_NotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	_, err := svc.UpdateCompleted(9999, 1, true)
+	_, err := svc.UpdateCompleted(ctx, 9999, 1, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -253,22 +267,24 @@ func TestDelete(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	created, err := svc.Create(listID, user.ID, &shoppingitem.CreateRequest{Name: "Juice"})
+	created, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Juice"})
 	require.NoError(t, err)
 
-	err = svc.Delete(created.ID)
+	err = svc.Delete(ctx, created.ID)
 	require.NoError(t, err)
 
-	_, err = svc.GetByID(created.ID)
+	_, err = svc.GetByID(ctx, created.ID)
 	require.Error(t, err)
 }
 
 func TestDelete_NotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	err := svc.Delete(9999)
+	err := svc.Delete(ctx, 9999)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -279,6 +295,7 @@ func TestReAddFromHistory(t *testing.T) {
 	listID := seedList(t, db, user.ID)
 
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
 	result := db.Exec(
 		`INSERT INTO shopping_history (list_id, name, quantity, unit, completed_by, completed_at, created_at, updated_at) VALUES (?, 'Chips', 3, 'bags', ?, datetime('now'), datetime('now'), datetime('now'))`,
@@ -290,7 +307,7 @@ func TestReAddFromHistory(t *testing.T) {
 	db.Raw("SELECT id FROM shopping_history WHERE name = 'Chips'").Scan(&historyID)
 	require.NotZero(t, historyID)
 
-	item, err := svc.ReAddFromHistory(historyID, user.ID)
+	item, err := svc.ReAddFromHistory(ctx, historyID, user.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Chips", item.Name)
 	assert.Equal(t, float64(3), item.Quantity)
@@ -302,8 +319,9 @@ func TestReAddFromHistory(t *testing.T) {
 func TestReAddFromHistory_NotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
 
-	_, err := svc.ReAddFromHistory(9999, 1)
+	_, err := svc.ReAddFromHistory(ctx, 9999, 1)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }

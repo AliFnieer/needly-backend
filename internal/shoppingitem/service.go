@@ -59,13 +59,13 @@ func NewService(db *gorm.DB, cache *cache.Cache, historySvc *history.Service, no
 	}
 }
 
-func (s *Service) validateCategoryID(categoryID *uint) error {
+func (s *Service) validateCategoryID(categoryID *uint, householdID uint) error {
 	if categoryID == nil || *categoryID == 0 {
 		return nil
 	}
 
 	var cat category.Category
-	if err := s.db.First(&cat, *categoryID).Error; err != nil {
+	if err := s.db.Where("id = ? AND household_id = ?", *categoryID, householdID).First(&cat).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("category not found")
 		}
@@ -76,13 +76,16 @@ func (s *Service) validateCategoryID(categoryID *uint) error {
 }
 
 // Create adds a new item to a shopping list.
-func (s *Service) Create(listID, userID uint, req *CreateRequest) (*ShoppingItem, error) {
+func (s *Service) Create(ctx context.Context, listID, userID uint, req *CreateRequest) (*ShoppingItem, error) {
 	quantity := req.Quantity
 	if quantity <= 0 {
 		quantity = 1
 	}
 
-	if err := s.validateCategoryID(req.CategoryID); err != nil {
+	// Resolve the household that owns the list so we can validate the
+	// category belongs to the same household (data isolation).
+	householdID := s.householdIDForList(listID)
+	if err := s.validateCategoryID(req.CategoryID, householdID); err != nil {
 		return nil, err
 	}
 
@@ -111,8 +114,7 @@ func (s *Service) Create(listID, userID uint, req *CreateRequest) (*ShoppingItem
 	s.invalidateListItems(listID)
 
 	// Notify household members about the new item
-	householdID := s.householdIDForList(listID)
-	s.notify(context.Background(), notification.NotificationTypeItemCreated,
+	s.notify(ctx, notification.NotificationTypeItemCreated,
 		"New shopping item",
 		fmt.Sprintf("Item %q was added to the list", item.Name),
 		householdID, listID, item.ID, userID)
@@ -121,8 +123,7 @@ func (s *Service) Create(listID, userID uint, req *CreateRequest) (*ShoppingItem
 }
 
 // GetByID retrieves a shopping item by ID.
-func (s *Service) GetByID(id uint) (*ShoppingItem, error) {
-	ctx := context.Background()
+func (s *Service) GetByID(ctx context.Context, id uint) (*ShoppingItem, error) {
 	cacheKey := itemCacheKey(id)
 
 	// Try cache first
@@ -156,8 +157,7 @@ func (s *Service) GetByID(id uint) (*ShoppingItem, error) {
 }
 
 // ListByListID retrieves all items in a shopping list.
-func (s *Service) ListByListID(listID uint) ([]ShoppingItem, error) {
-	ctx := context.Background()
+func (s *Service) ListByListID(ctx context.Context, listID uint) ([]ShoppingItem, error) {
 	cacheKey := listItemsCacheKey(listID)
 
 	// Try cache first
@@ -188,7 +188,7 @@ func (s *Service) ListByListID(listID uint) ([]ShoppingItem, error) {
 }
 
 // Update updates a shopping item.
-func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, error) {
+func (s *Service) Update(ctx context.Context, id, userID uint, req *UpdateRequest) (*ShoppingItem, error) {
 	var item ShoppingItem
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -207,7 +207,9 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, er
 		item.Unit = strings.TrimSpace(req.Unit)
 	}
 	if req.CategoryID != nil {
-		if err := s.validateCategoryID(req.CategoryID); err != nil {
+		// Validate the category belongs to the same household as the item's list.
+		householdID := s.householdIDForList(item.ListID)
+		if err := s.validateCategoryID(req.CategoryID, householdID); err != nil {
 			return nil, err
 		}
 		// category_id of 0 clears the category assignment
@@ -236,7 +238,7 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, er
 
 	// Notify household members about the updated item
 	householdID := s.householdIDForList(item.ListID)
-	s.notify(context.Background(), notification.NotificationTypeItemUpdated,
+	s.notify(ctx, notification.NotificationTypeItemUpdated,
 		"Shopping item updated",
 		fmt.Sprintf("Item %q was updated", item.Name),
 		householdID, item.ListID, item.ID, userID)
@@ -245,7 +247,7 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*ShoppingItem, er
 }
 
 // UpdateCompleted updates just the completion status of a shopping item.
-func (s *Service) UpdateCompleted(id, userID uint, isCompleted bool) (*ShoppingItem, error) {
+func (s *Service) UpdateCompleted(ctx context.Context, id, userID uint, isCompleted bool) (*ShoppingItem, error) {
 	var item ShoppingItem
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -278,7 +280,7 @@ func (s *Service) UpdateCompleted(id, userID uint, isCompleted bool) (*ShoppingI
 	}
 
 	householdID := s.householdIDForList(item.ListID)
-	s.notify(context.Background(), nt,
+	s.notify(ctx, nt,
 		title,
 		fmt.Sprintf("Item %q was %s", item.Name, map[bool]string{true: "completed", false: "re-opened"}[isCompleted]),
 		householdID, item.ListID, item.ID, userID)
@@ -287,7 +289,7 @@ func (s *Service) UpdateCompleted(id, userID uint, isCompleted bool) (*ShoppingI
 }
 
 // Delete removes a shopping item.
-func (s *Service) Delete(id uint) error {
+func (s *Service) Delete(ctx context.Context, id uint) error {
 	var item ShoppingItem
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -309,7 +311,7 @@ func (s *Service) Delete(id uint) error {
 
 	// Notify household members about the deleted item
 	householdID := s.householdIDForList(item.ListID)
-	s.notify(context.Background(), notification.NotificationTypeItemDeleted,
+	s.notify(ctx, notification.NotificationTypeItemDeleted,
 		"Shopping item deleted",
 		fmt.Sprintf("Item %q was deleted", item.Name),
 		householdID, item.ListID, item.ID, 0)
@@ -318,7 +320,7 @@ func (s *Service) Delete(id uint) error {
 }
 
 // ReAddFromHistory recreates a shopping item from a completed history entry.
-func (s *Service) ReAddFromHistory(historyID, userID uint) (*ShoppingItem, error) {
+func (s *Service) ReAddFromHistory(ctx context.Context, historyID, userID uint) (*ShoppingItem, error) {
 	var entry history.ShoppingHistory
 	if err := s.db.First(&entry, historyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -345,7 +347,7 @@ func (s *Service) ReAddFromHistory(historyID, userID uint) (*ShoppingItem, error
 
 	// Notify household members about the re-added item
 	householdID := s.householdIDForList(item.ListID)
-	s.notify(context.Background(), notification.NotificationTypeItemReAdded,
+	s.notify(ctx, notification.NotificationTypeItemReAdded,
 		"Shopping item re-added",
 		fmt.Sprintf("Item %q was re-added to the list", item.Name),
 		householdID, item.ListID, item.ID, userID)

@@ -30,8 +30,6 @@ func getCurrentUserID(c *gin.Context) (uint, bool) {
 		return 0, false
 	}
 
-
-	
 	id, ok := value.(float64)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -75,7 +73,7 @@ func (ctl *Controller) Create(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.Create(listID, userID, &req)
+	item, err := ctl.service.Create(c.Request.Context(), listID, userID, &req)
 	if err != nil {
 		slog.Error("shopping item create failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -94,7 +92,7 @@ func (ctl *Controller) List(c *gin.Context) {
 		return
 	}
 
-	items, err := ctl.service.ListByListID(listID)
+	items, err := ctl.service.ListByListID(c.Request.Context(), listID)
 	if err != nil {
 		slog.Error("shopping item list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -113,7 +111,7 @@ func (ctl *Controller) GetByID(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.GetByID(id)
+	item, err := ctl.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": err.Error(),
@@ -144,7 +142,7 @@ func (ctl *Controller) Update(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.Update(id, userID, &req)
+	item, err := ctl.service.Update(c.Request.Context(), id, userID, &req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -177,7 +175,7 @@ func (ctl *Controller) SetCompleted(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.UpdateCompleted(id, userID, req.IsCompleted)
+	item, err := ctl.service.UpdateCompleted(c.Request.Context(), id, userID, req.IsCompleted)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -195,7 +193,7 @@ func (ctl *Controller) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := ctl.service.Delete(id); err != nil {
+	if err := ctl.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -217,7 +215,7 @@ func (ctl *Controller) ReAddFromHistory(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.ReAddFromHistory(historyID, userID)
+	item, err := ctl.service.ReAddFromHistory(c.Request.Context(), historyID, userID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),

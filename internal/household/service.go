@@ -7,7 +7,9 @@ import (
 	"log/slog"
 
 	"github.com/AliFnieer/needly-backend/internal/cache"
+	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/notification"
+	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
 	"gorm.io/gorm"
 )
 
@@ -196,6 +198,28 @@ func (s *Service) Delete(id, userID uint) error {
 		if err := tx.Where("household_id = ?", id).Delete(&HouseholdMember{}).Error; err != nil {
 			return err
 		}
+		// Delete all categories scoped to this household
+		if err := tx.Where("household_id = ?", id).Delete(&category.Category{}).Error; err != nil {
+			return err
+		}
+		// Delete all history entries belonging to this household's lists
+		if err := tx.Exec(
+			"DELETE FROM shopping_history WHERE list_id IN (SELECT id FROM shopping_lists WHERE household_id = ?)",
+			id,
+		).Error; err != nil {
+			return err
+		}
+		// Delete all items belonging to this household's lists
+		if err := tx.Exec(
+			"DELETE FROM shopping_items WHERE list_id IN (SELECT id FROM shopping_lists WHERE household_id = ?)",
+			id,
+		).Error; err != nil {
+			return err
+		}
+		// Delete all shopping lists
+		if err := tx.Where("household_id = ?", id).Delete(&shoppinglist.ShoppingList{}).Error; err != nil {
+			return err
+		}
 		// Delete the household
 		if err := tx.Delete(&household).Error; err != nil {
 			return err
@@ -380,11 +404,31 @@ func (s *Service) invalidateHouseholdCache(householdID uint) {
 		return
 	}
 	ctx := context.Background()
-	key := fmt.Sprintf("%s%d", householdCacheKeyPrefix, householdID)
-	if err := s.cache.Delete(ctx, key); err != nil {
-		slog.Warn("failed to invalidate household cache", "household_id", householdID, "error", err)
+
+	// Direct keys
+	keys := []string{
+		fmt.Sprintf("%s%d", householdCacheKeyPrefix, householdID),          // household:<id>
+		fmt.Sprintf("%s%d%s", householdCacheKeyPrefix, householdID, ":lists"), // household:<id>:lists
+		fmt.Sprintf("categories:household:%d", householdID),                // categories:household:<id>
+		fmt.Sprintf("notifications:%d:history", householdID),               // notifications:<id>:history
 	}
-	if err := s.cache.DeleteByPattern(ctx, householdListCacheKey+"*"); err != nil {
-		slog.Warn("failed to invalidate household list cache pattern", "error", err)
+	for _, key := range keys {
+		if err := s.cache.Delete(ctx, key); err != nil {
+			slog.Warn("failed to invalidate household cache key", "key", key, "error", err)
+		}
+	}
+
+	// Pattern-based keys
+	patterns := []string{
+		householdListCacheKey + "*",          // households:user:*
+		fmt.Sprintf("category:%d:*", householdID), // category:<id>:*
+		fmt.Sprintf("shoppinglist:*"),         // shoppinglist:<id> (all lists in household)
+		fmt.Sprintf("list:*:items"),           // list:<id>:items
+		fmt.Sprintf("shoppingitem:*"),         // shoppingitem:<id>
+	}
+	for _, pattern := range patterns {
+		if err := s.cache.DeleteByPattern(ctx, pattern); err != nil {
+			slog.Warn("failed to invalidate household cache pattern", "pattern", pattern, "error", err)
+		}
 	}
 }

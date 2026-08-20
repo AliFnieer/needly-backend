@@ -3,9 +3,13 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
+	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -59,12 +63,14 @@ func NewService(db *gorm.DB, cfg *config.Config) *Service {
 
 // Register creates a new user account and returns token pair.
 func (s *Service) Register(req *RegisterRequest) (*AuthResponse, error) {
+	normalizedEmail := normalizeEmail(req.Email)
+
 	// Check if email is already registered
 	var existing User
-	if err := s.db.Where("email = ?", req.Email).First(&existing).Error; err == nil {
-		return nil, errors.New("email already registered")
+	if err := s.db.Where("email = ?", normalizedEmail).First(&existing).Error; err == nil {
+		return nil, apperr.Conflict("email already registered")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("failed to check existing user: %w", err)
+		return nil, apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to check existing user")
 	}
 
 	// Hash the password
@@ -77,12 +83,16 @@ func (s *Service) Register(req *RegisterRequest) (*AuthResponse, error) {
 	user := User{
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
-		Email:        req.Email,
+		Email:        normalizedEmail,
 		PasswordHash: string(hashedPassword),
 	}
 
 	if err := s.db.Create(&user).Error; err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		// Map unique constraint violations (concurrent duplicate email) to a conflict.
+		if isUniqueViolation(err) {
+			return nil, apperr.Conflict("email already registered")
+		}
+		return nil, apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to create user")
 	}
 
 	// Issue token pair
@@ -91,17 +101,18 @@ func (s *Service) Register(req *RegisterRequest) (*AuthResponse, error) {
 
 // Login authenticates a user and returns token pair.
 func (s *Service) Login(req *LoginRequest) (*AuthResponse, error) {
+	normalizedEmail := normalizeEmail(req.Email)
 	var user User
-	if err := s.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+	if err := s.db.Where("email = ?", normalizedEmail).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invalid email or password")
+			return nil, apperr.Unauthorized("invalid email or password")
 		}
-		return nil, fmt.Errorf("failed to find user: %w", err)
+		return nil, apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to find user")
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, apperr.Unauthorized("invalid email or password")
 	}
 
 	// Issue token pair
@@ -162,6 +173,25 @@ func (s *Service) Logout(userID uint, req *LogoutRequest) error {
 	}
 	// Revoke all tokens for the user
 	return s.revokeAllForUser(userID)
+}
+
+// CleanupExpiredRefreshTokens removes expired refresh tokens from storage.
+func (s *Service) CleanupExpiredRefreshTokens() (int64, error) {
+	result := s.db.Where("expires_at < ?", time.Now()).Delete(&RefreshToken{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to cleanup expired refresh tokens: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
+// isUniqueViolation reports whether the error is a PostgreSQL unique
+// constraint violation (SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return false
 }
 
 // GetByID retrieves a user by their ID.
@@ -230,4 +260,8 @@ func (s *Service) revokeAllForUser(userID uint) error {
 	return s.db.Model(&RefreshToken{}).
 		Where("user_id = ? AND revoked_at IS NULL", userID).
 		Update("revoked_at", time.Now()).Error
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
 }

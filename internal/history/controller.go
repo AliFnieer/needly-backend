@@ -39,7 +39,16 @@ func (ctl *Controller) ListByListID(c *gin.Context) {
 		return
 	}
 
-	entries, err := ctl.service.ListByListID(listID)
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if err != nil || limit < 0 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	entries, err := ctl.service.ListByListID(listID, limit, offset)
 	if err != nil {
 		slog.Error("history list by list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -58,7 +67,16 @@ func (ctl *Controller) ListByHouseholdID(c *gin.Context) {
 		return
 	}
 
-	entries, err := ctl.service.ListByHouseholdID(householdID)
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if err != nil || limit < 0 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	entries, err := ctl.service.ListByHouseholdID(householdID, limit, offset)
 	if err != nil {
 		slog.Error("history list by household failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

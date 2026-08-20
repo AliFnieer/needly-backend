@@ -31,7 +31,9 @@ func NewMiddleware(metrics *Metrics) *Middleware {
 func (m *Middleware) GinMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
-		path := c.Request.URL.Path
+		// Use the route pattern (e.g. /api/v1/lists/:id/items) to avoid
+		// unbounded cardinality from raw URL paths.
+		path := c.FullPath()
 		method := c.Request.Method
 
 		// Start OTel span

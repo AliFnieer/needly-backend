@@ -83,7 +83,7 @@ func (s *Service) NotifyClient(ctx context.Context, clientID string, n *Notifica
 // HistoryByHousehold returns recently delivered notifications for a household.
 func (s *Service) HistoryByHousehold(ctx context.Context, householdID uint) ([]*Notification, error) {
 	key := householdHistoryKey(householdID)
-	data, err := s.redis.Get(ctx, key).Bytes()
+	data, err := s.redis.LRange(ctx, key, 0, -1).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return []*Notification{}, nil
@@ -91,9 +91,14 @@ func (s *Service) HistoryByHousehold(ctx context.Context, householdID uint) ([]*
 		return nil, err
 	}
 
-	var items []*Notification
-	if err := json.Unmarshal(data, &items); err != nil {
-		return nil, err
+	items := make([]*Notification, 0, len(data))
+	for _, raw := range data {
+		var n Notification
+		if err := json.Unmarshal([]byte(raw), &n); err != nil {
+			slog.Error("notification history unmarshal failed", "error", err)
+			continue
+		}
+		items = append(items, &n)
 	}
 	return items, nil
 }
@@ -109,7 +114,8 @@ func (s *Service) broadcastToHousehold(n *Notification) error {
 }
 
 // storeHistory appends a notification to per-household history, keeping the
-// list bounded by the configured history limit.
+// list bounded by the configured history limit. It uses a Redis list with
+// LPUSH + LTRIM so concurrent writes are atomic and never lose events.
 func (s *Service) storeHistory(ctx context.Context, n *Notification) {
 	key := householdHistoryKey(n.HouseholdID)
 
@@ -118,24 +124,18 @@ func (s *Service) storeHistory(ctx context.Context, n *Notification) {
 		limit = s.cfg.HistoryLimit
 	}
 
-	items, err := s.HistoryByHousehold(ctx, n.HouseholdID)
-	if err != nil {
-		slog.Error("notification history read failed", "household_id", n.HouseholdID, "error", err)
-		items = []*Notification{}
-	}
-
-	items = append([]*Notification{n}, items...)
-	if len(items) > limit {
-		items = items[:limit]
-	}
-
-	data, err := json.Marshal(items)
+	data, err := json.Marshal(n)
 	if err != nil {
 		slog.Error("notification history marshal failed", "household_id", n.HouseholdID, "error", err)
 		return
 	}
 
-	if err := s.redis.Set(ctx, key, data, 24*time.Hour).Err(); err != nil {
+	// Atomically prepend the new notification and trim to the limit.
+	pipe := s.redis.TxPipeline()
+	pipe.LPush(ctx, key, data)
+	pipe.LTrim(ctx, key, 0, int64(limit-1))
+	pipe.Expire(ctx, key, 24*time.Hour)
+	if _, err := pipe.Exec(ctx); err != nil {
 		slog.Error("notification history store failed", "household_id", n.HouseholdID, "error", err)
 	}
 }

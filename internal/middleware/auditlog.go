@@ -89,7 +89,8 @@ func AuditLogMiddleware() gin.HandlerFunc {
 		var reqBody []byte
 		ct := c.GetHeader("Content-Type")
 		if c.Request.Body != nil && isJSONContentType(ct) {
-			reqBody, _ = io.ReadAll(io.LimitReader(c.Request.Body, maxAuditBodySize))
+			// Read the FULL body so downstream handlers see the complete payload.
+			reqBody, _ = io.ReadAll(c.Request.Body)
 			c.Request.Body = io.NopCloser(bytes.NewReader(reqBody))
 		}
 

@@ -73,7 +73,7 @@ func (ctl *Controller) Create(c *gin.Context) {
 		return
 	}
 
-	list, err := ctl.service.Create(householdID, userID, &req)
+	list, err := ctl.service.Create(c.Request.Context(), householdID, userID, &req)
 	if err != nil {
 		slog.Error("shopping list create failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -92,7 +92,7 @@ func (ctl *Controller) List(c *gin.Context) {
 		return
 	}
 
-	lists, err := ctl.service.ListByHouseholdID(householdID)
+	lists, err := ctl.service.ListByHouseholdID(c.Request.Context(), householdID)
 	if err != nil {
 		slog.Error("shopping list list failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -111,7 +111,7 @@ func (ctl *Controller) GetByID(c *gin.Context) {
 		return
 	}
 
-	list, err := ctl.service.GetByID(id)
+	list, err := ctl.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": err.Error(),
@@ -137,7 +137,7 @@ func (ctl *Controller) Update(c *gin.Context) {
 		return
 	}
 
-	list, err := ctl.service.Update(id, &req)
+	list, err := ctl.service.Update(c.Request.Context(), id, &req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -155,7 +155,7 @@ func (ctl *Controller) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := ctl.service.Delete(id); err != nil {
+	if err := ctl.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})

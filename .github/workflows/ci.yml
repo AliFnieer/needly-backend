@@ -7,7 +7,7 @@ on:
     branches: [main, dev]
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.26.6"
 
 jobs:
   dependency-scan:
@@ -83,6 +83,14 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
   test:
     name: Test

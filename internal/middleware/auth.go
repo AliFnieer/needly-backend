@@ -40,8 +40,8 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 		// Parse and validate the token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Verify signing method
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			// Verify signing method — only accept HS256 to prevent algorithm confusion
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 				return nil, jwt.ErrSignatureInvalid
 			}
 			return []byte(cfg.JWT.Secret), nil

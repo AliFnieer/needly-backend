@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,5 +42,5 @@ func RequestTimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
 // isWebSocketUpgrade checks if the request is a WebSocket upgrade.
 func isWebSocketUpgrade(c *gin.Context) bool {
 	upgrade := c.GetHeader("Upgrade")
-	return upgrade == "websocket" || upgrade == "WebSocket"
+	return strings.EqualFold(upgrade, "websocket")
 }

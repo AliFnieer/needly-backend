@@ -2,6 +2,8 @@ module github.com/AliFnieer/needly-backend
 
 go 1.25.0
 
+toolchain go1.26.6
+
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1

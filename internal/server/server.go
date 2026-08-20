@@ -82,9 +82,7 @@ func (s *Server) registerDBPoolStats() {
 	}
 
 	statsCollector := &dbPoolStatsCollector{db: sqlDB}
-	srv := s.metrics
-	_ = srv // just to verify it's accessible
-	prometheus.MustRegister(statsCollector)
+	s.metrics.MustRegisterCustom(statsCollector)
 	slog.Info("database pool stats collector registered")
 }
 
@@ -146,12 +144,6 @@ func (s *Server) setupMiddleware() {
 	s.engine.Use(s.rateLimiter.Middleware())
 	s.engine.Use(middleware.APIVersionMiddleware())
 
-	cb := middleware.NewCircuitBreaker(&middleware.CircuitBreakerConfig{
-		Threshold:    5,
-		ResetTimeout: 30 * time.Second,
-		HalfOpenMax:  2,
-	})
-	s.engine.Use(cb.Middleware())
 }
 
 func (s *Server) setupRoutes() {
@@ -200,8 +192,16 @@ func (s *Server) setupRoutes() {
 	s.engine.GET("/docs/redoc", gin.WrapH(docs.RedocUIHandler()))
 	s.engine.GET("/docs/openapi.json", gin.WrapH(http.HandlerFunc(docs.ServeOpenAPIHandler)))
 
-	// API v1 routes
+	// API v1 routes — scoped circuit breaker so that a failing dependency
+	// (e.g. DB outage) only affects the API group, never /health or /metrics.
 	apiV1 := s.engine.Group("/api/v1")
+	cb := middleware.NewCircuitBreaker(&middleware.CircuitBreakerConfig{
+		Threshold:    5,
+		ResetTimeout: 30 * time.Second,
+		HalfOpenMax:  2,
+	})
+	apiV1.Use(cb.Middleware())
+
 	auth.RegisterRoutes(apiV1, s.db, s.cfg, s.rateLimiter)
 	category.RegisterRoutes(apiV1, s.db, s.cfg, s.cache)
 	history.RegisterRoutes(apiV1, s.db, s.cfg)

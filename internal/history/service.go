@@ -40,26 +40,59 @@ func (s *Service) Record(listID, itemID, completedBy uint, name string, quantity
 	return &entry, nil
 }
 
-// ListByListID retrieves history entries for a shopping list.
-func (s *Service) ListByListID(listID uint) ([]ShoppingHistory, error) {
+const (
+	// defaultHistoryLimit is the default maximum number of history entries
+	// returned per page when no limit is specified.
+	defaultHistoryLimit = 50
+	// maxHistoryLimit caps the page size to prevent abuse.
+	maxHistoryLimit = 200
+)
+
+// ListByListID retrieves history entries for a shopping list with pagination.
+// limit of 0 uses the default; limit larger than maxHistoryLimit is capped.
+func (s *Service) ListByListID(listID uint, limit, offset int) ([]ShoppingHistory, error) {
+	limit, offset = normalizePage(limit, offset)
 	var entries []ShoppingHistory
-	if err := s.db.Preload("Category").Where("list_id = ?", listID).Order("completed_at DESC").Find(&entries).Error; err != nil {
+	if err := s.db.Preload("Category").
+		Where("list_id = ?", listID).
+		Order("completed_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("failed to list shopping history: %w", err)
 	}
 	return entries, nil
 }
 
-// ListByHouseholdID retrieves history entries across all lists in a household.
-func (s *Service) ListByHouseholdID(householdID uint) ([]ShoppingHistory, error) {
+// ListByHouseholdID retrieves history entries across all lists in a household
+// with pagination. limit/offset follow the same rules as ListByListID.
+func (s *Service) ListByHouseholdID(householdID uint, limit, offset int) ([]ShoppingHistory, error) {
+	limit, offset = normalizePage(limit, offset)
 	var entries []ShoppingHistory
 	if err := s.db.Preload("Category").
 		Joins("JOIN shopping_lists ON shopping_lists.id = shopping_history.list_id").
 		Where("shopping_lists.household_id = ?", householdID).
 		Order("shopping_history.completed_at DESC").
+		Limit(limit).
+		Offset(offset).
 		Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("failed to list household shopping history: %w", err)
 	}
 	return entries, nil
+}
+
+// normalizePage clamps limit and offset to safe values.
+func normalizePage(limit, offset int) (int, int) {
+	if limit <= 0 {
+		limit = defaultHistoryLimit
+	}
+	if limit > maxHistoryLimit {
+		limit = maxHistoryLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
 }
 
 // GetByID retrieves a single history entry by ID.

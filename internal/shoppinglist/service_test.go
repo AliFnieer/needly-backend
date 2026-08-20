@@ -1,6 +1,7 @@
 package shoppinglist_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/AliFnieer/needly-backend/internal/household"
@@ -13,13 +14,14 @@ func TestCreate(t *testing.T) {
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
 	hh, err := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 	if err != nil {
 		t.Fatalf("failed to create household: %v", err)
 	}
 
-	list, err := svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Groceries"})
+	list, err := svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Groceries"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -39,11 +41,12 @@ func TestGetByID(t *testing.T) {
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
-	list, _ := svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "My List"})
+	list, _ := svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "My List"})
 
-	got, err := svc.GetByID(list.ID)
+	got, err := svc.GetByID(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,7 +54,7 @@ func TestGetByID(t *testing.T) {
 		t.Errorf("expected name 'My List', got %q", got.Name)
 	}
 
-	_, err = svc.GetByID(99999)
+	_, err = svc.GetByID(ctx, 99999)
 	if err == nil {
 		t.Error("expected error for non-existent list")
 	}
@@ -62,14 +65,15 @@ func TestListByHouseholdID(t *testing.T) {
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 
-	svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "First"})
-	svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Second"})
-	svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Third"})
+	svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "First"})
+	svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Second"})
+	svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Third"})
 
-	lists, err := svc.ListByHouseholdID(hh.ID)
+	lists, err := svc.ListByHouseholdID(ctx, hh.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -89,11 +93,12 @@ func TestUpdate(t *testing.T) {
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
-	list, _ := svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Old Name"})
+	list, _ := svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Old Name"})
 
-	updated, err := svc.Update(list.ID, &shoppinglist.UpdateRequest{Name: "New Name"})
+	updated, err := svc.Update(ctx, list.ID, &shoppinglist.UpdateRequest{Name: "New Name"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -101,7 +106,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("expected name 'New Name', got %q", updated.Name)
 	}
 
-	fetched, _ := svc.GetByID(list.ID)
+	fetched, _ := svc.GetByID(ctx, list.ID)
 	if fetched.Name != "New Name" {
 		t.Errorf("expected persisted name 'New Name', got %q", fetched.Name)
 	}
@@ -110,8 +115,9 @@ func TestUpdate(t *testing.T) {
 func TestUpdateNotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
-	_, err := svc.Update(99999, &shoppinglist.UpdateRequest{Name: "Nope"})
+	_, err := svc.Update(ctx, 99999, &shoppinglist.UpdateRequest{Name: "Nope"})
 	if err == nil {
 		t.Error("expected error for non-existent list")
 	}
@@ -122,16 +128,17 @@ func TestDelete(t *testing.T) {
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
-	list, _ := svc.Create(hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "To Delete"})
+	list, _ := svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "To Delete"})
 
-	err := svc.Delete(list.ID)
+	err := svc.Delete(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_, err = svc.GetByID(list.ID)
+	_, err = svc.GetByID(ctx, list.ID)
 	if err == nil {
 		t.Error("expected error when fetching deleted list")
 	}
@@ -140,8 +147,9 @@ func TestDelete(t *testing.T) {
 func TestDeleteNotFound(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
-	err := svc.Delete(99999)
+	err := svc.Delete(ctx, 99999)
 	if err == nil {
 		t.Error("expected error for non-existent list")
 	}
@@ -152,10 +160,11 @@ func TestListByHouseholdIDEmpty(t *testing.T) {
 	user := testutil.SeedUser(t, db, "owner@test.com", "password123")
 	hhSvc := household.NewService(db, nil, nil)
 	svc := shoppinglist.NewService(db, nil, nil)
+	ctx := context.Background()
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 
-	lists, err := svc.ListByHouseholdID(hh.ID)
+	lists, err := svc.ListByHouseholdID(ctx, hh.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

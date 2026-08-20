@@ -2,6 +2,7 @@ package auth
 
 import (
 	"testing"
+	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"gorm.io/driver/sqlite"
@@ -46,6 +47,10 @@ func newTestService(t *testing.T) *Service {
 	t.Helper()
 	db := setupTestDB(t)
 	return NewService(db, testServiceConfig())
+}
+
+func testNow() time.Time {
+	return time.Now()
 }
 
 func TestRegister_Success(t *testing.T) {
@@ -94,6 +99,28 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 	}
 	if err.Error() != "email already registered" {
 		t.Errorf("expected 'email already registered', got %v", err)
+	}
+}
+
+func TestRegister_NormalizesEmail(t *testing.T) {
+	svc := newTestService(t)
+
+	resp, err := svc.Register(&RegisterRequest{
+		FirstName: "Ali",
+		LastName:  "Fnier",
+		Email:     "  ALI@Test.com  ",
+		Password:  "securepass123",
+	})
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	if resp.User.Email != "ali@test.com" {
+		t.Fatalf("expected normalized email ali@test.com, got %q", resp.User.Email)
+	}
+
+	_, err = svc.Login(&LoginRequest{Email: "ALI@TEST.COM", Password: "securepass123"})
+	if err != nil {
+		t.Fatalf("login should succeed with normalized email: %v", err)
 	}
 }
 
@@ -281,6 +308,39 @@ func TestLogout_AllTokens(t *testing.T) {
 	_, err = svc.Refresh(&RefreshRequest{RefreshToken: reg.RefreshToken})
 	if err == nil {
 		t.Fatal("expected error after logout all")
+	}
+}
+
+func TestCleanupExpiredRefreshTokens(t *testing.T) {
+	svc := newTestService(t)
+	user := &User{FirstName: "Ali", LastName: "Fnier", Email: "ali@test.com", PasswordHash: "hash"}
+	if err := svc.db.Create(user).Error; err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+
+	expired := RefreshToken{UserID: user.ID, TokenHash: "expired-hash", FamilyID: "family-1", ExpiresAt: testNow().Add(-time.Hour)}
+	active := RefreshToken{UserID: user.ID, TokenHash: "active-hash", FamilyID: "family-2", ExpiresAt: testNow().Add(time.Hour)}
+	if err := svc.db.Create(&expired).Error; err != nil {
+		t.Fatalf("create expired token failed: %v", err)
+	}
+	if err := svc.db.Create(&active).Error; err != nil {
+		t.Fatalf("create active token failed: %v", err)
+	}
+
+	deleted, err := svc.CleanupExpiredRefreshTokens()
+	if err != nil {
+		t.Fatalf("cleanup failed: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected 1 expired token deleted, got %d", deleted)
+	}
+
+	var remaining int64
+	if err := svc.db.Model(&RefreshToken{}).Count(&remaining).Error; err != nil {
+		t.Fatalf("count remaining failed: %v", err)
+	}
+	if remaining != 1 {
+		t.Fatalf("expected 1 remaining token, got %d", remaining)
 	}
 }
 

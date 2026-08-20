@@ -1,9 +1,11 @@
 package websocket
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/gin-gonic/gin"
@@ -72,17 +74,33 @@ func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
 
 	h.Register(client)
 
-	// Start write pump
+	conn.SetPingHandler(func(string) error {
+		return conn.WriteControl(gorilla.PingMessage, []byte("ping"), time.Now().Add(5*time.Second))
+	})
+
 	go func() {
-		for msg := range client.Send {
-			if err := conn.WriteMessage(gorilla.TextMessage, msg); err != nil {
-				break
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(gorilla.PingMessage, []byte("ping"), time.Now().Add(5*time.Second)); err != nil {
+					conn.Close()
+					return
+				}
+			case msg, ok := <-client.Send:
+				if !ok {
+					conn.Close()
+					return
+				}
+				if err := conn.WriteMessage(gorilla.TextMessage, msg); err != nil {
+					conn.Close()
+					return
+				}
 			}
 		}
-		conn.Close()
 	}()
 
-	// Read loop: drain until error, then unregister
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			break
@@ -124,7 +142,13 @@ func upgradeWithOriginCheck(c *gin.Context, cfg *config.Config) (*gorilla.Conn, 
 // verifyHouseholdMembership checks that the user belongs to the household.
 func verifyHouseholdMembership(db *gorm.DB, householdID, userID uint) error {
 	var count int64
-	return db.Table("household_members").
+	if err := db.Table("household_members").
 		Where("household_id = ? AND user_id = ?", householdID, userID).
-		Count(&count).Error
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("not a household member")
+	}
+	return nil
 }

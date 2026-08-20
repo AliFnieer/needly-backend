@@ -102,7 +102,7 @@ func TestHistory_ListByListID(t *testing.T) {
 	_, _ = svc.Record(1, 11, 5, "Bread", 1, "pcs", nil)
 	_, _ = svc.Record(2, 12, 5, "Eggs", 12, "pcs", nil)
 
-	entries, err := svc.ListByListID(1)
+	entries, err := svc.ListByListID(1, 50, 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -114,12 +114,34 @@ func TestHistory_ListByListID(t *testing.T) {
 func TestHistory_ListByListID_Empty(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	entries, err := svc.ListByListID(999)
+	entries, err := svc.ListByListID(999, 50, 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if len(entries) != 0 {
 		t.Errorf("expected 0 entries, got %d", len(entries))
+	}
+}
+
+func TestHistory_ListByListID_Pagination(t *testing.T) {
+	svc, _ := newTestService(t)
+
+	for i := 0; i < 3; i++ {
+		_, err := svc.Record(1, uint(10+i), 5, "Item", float64(i+1), "pcs", nil)
+		if err != nil {
+			t.Fatalf("record failed: %v", err)
+		}
+	}
+
+	entries, err := svc.ListByListID(1, 2, 1)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].Name != "Item" || entries[1].Name != "Item" {
+		t.Fatalf("expected paginated returned items, got %+v", entries)
 	}
 }
 
@@ -177,7 +199,7 @@ func TestHistory_ListByHouseholdID(t *testing.T) {
 	_, _ = historySvc.Record(sl2.ID, 11, 1, "Bread", 1, "pcs", nil)
 	_, _ = historySvc.Record(sl3.ID, 12, 2, "Soda", 6, "pcs", nil)
 
-	entries, err := historySvc.ListByHouseholdID(1)
+	entries, err := historySvc.ListByHouseholdID(1, 50, 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -185,7 +207,7 @@ func TestHistory_ListByHouseholdID(t *testing.T) {
 		t.Fatalf("expected 2 entries for household 1, got %d", len(entries))
 	}
 
-	entries2, err := historySvc.ListByHouseholdID(2)
+	entries2, err := historySvc.ListByHouseholdID(2, 50, 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -200,7 +222,7 @@ func TestHistory_ListByHouseholdID(t *testing.T) {
 func TestHistory_ListByHouseholdID_Empty(t *testing.T) {
 	svc, _ := newTestService(t)
 
-	entries, err := svc.ListByHouseholdID(999)
+	entries, err := svc.ListByHouseholdID(999, 50, 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -233,7 +255,7 @@ func TestHistory_ListByListID_Ordering(t *testing.T) {
 	entry1, _ := svc.Record(1, 10, 5, "First", 1, "pcs", nil)
 	entry2, _ := svc.Record(1, 11, 5, "Second", 2, "pcs", nil)
 
-	entries, err := svc.ListByListID(1)
+	entries, err := svc.ListByListID(1, 50, 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

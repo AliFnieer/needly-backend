@@ -78,19 +78,26 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 }
 
 // DeleteByPattern removes all keys matching a pattern.
+// It iterates through every page of the SCAN cursor so that more than
+// the first batch of matching keys are deleted.
 func (c *Cache) DeleteByPattern(ctx context.Context, pattern string) error {
-	iter := c.client.Scan(ctx, 0, pattern, 100).Iterator()
-	var keys []string
-	for iter.Next(ctx) {
-		keys = append(keys, iter.Val())
-	}
-	if err := iter.Err(); err != nil {
-		return fmt.Errorf("failed to scan cache keys for pattern %s: %w", pattern, err)
-	}
+	var cursor uint64
+	for {
+		keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("failed to scan cache keys for pattern %s: %w", pattern, err)
+		}
 
-	if len(keys) > 0 {
-		if err := c.client.Del(ctx, keys...).Err(); err != nil {
-			return fmt.Errorf("failed to delete cache keys for pattern %s: %w", pattern, err)
+		if len(keys) > 0 {
+			if err := c.client.Del(ctx, keys...).Err(); err != nil {
+				return fmt.Errorf("failed to delete cache keys for pattern %s: %w", pattern, err)
+			}
+		}
+
+		// Move to the next page; stop when the cursor returns to 0.
+		cursor = nextCursor
+		if cursor == 0 {
+			break
 		}
 	}
 

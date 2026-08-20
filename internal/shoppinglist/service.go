@@ -47,7 +47,7 @@ func NewService(db *gorm.DB, cache *cache.Cache, notificationSvc *notification.S
 }
 
 // Create creates a new shopping list for a household.
-func (s *Service) Create(householdID, userID uint, req *CreateRequest) (*ShoppingList, error) {
+func (s *Service) Create(ctx context.Context, householdID, userID uint, req *CreateRequest) (*ShoppingList, error) {
 	list := ShoppingList{
 		HouseholdID: householdID,
 		Name:        req.Name,
@@ -62,7 +62,7 @@ func (s *Service) Create(householdID, userID uint, req *CreateRequest) (*Shoppin
 	s.invalidateHouseholdLists(householdID)
 
 	// Notify household members about the new list
-	s.notify(context.Background(), notification.NotificationTypeListCreated,
+	s.notify(ctx, notification.NotificationTypeListCreated,
 		"New shopping list",
 		fmt.Sprintf("Shopping list %q was created", list.Name),
 		householdID, list.ID, 0, userID)
@@ -71,8 +71,7 @@ func (s *Service) Create(householdID, userID uint, req *CreateRequest) (*Shoppin
 }
 
 // GetByID retrieves a shopping list by ID.
-func (s *Service) GetByID(id uint) (*ShoppingList, error) {
-	ctx := context.Background()
+func (s *Service) GetByID(ctx context.Context, id uint) (*ShoppingList, error) {
 	cacheKey := listCacheKey(id)
 
 	// Try cache first
@@ -106,8 +105,7 @@ func (s *Service) GetByID(id uint) (*ShoppingList, error) {
 }
 
 // ListByHouseholdID retrieves all shopping lists for a household.
-func (s *Service) ListByHouseholdID(householdID uint) ([]ShoppingList, error) {
-	ctx := context.Background()
+func (s *Service) ListByHouseholdID(ctx context.Context, householdID uint) ([]ShoppingList, error) {
 	cacheKey := householdListsCacheKey(householdID)
 
 	// Try cache first
@@ -138,7 +136,7 @@ func (s *Service) ListByHouseholdID(householdID uint) ([]ShoppingList, error) {
 }
 
 // Update updates a shopping list.
-func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingList, error) {
+func (s *Service) Update(ctx context.Context, id uint, req *UpdateRequest) (*ShoppingList, error) {
 	var list ShoppingList
 	if err := s.db.First(&list, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -156,7 +154,7 @@ func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingList, error) {
 	s.invalidateList(list.ID, list.HouseholdID)
 
 	// Notify household members about the updated list
-	s.notify(context.Background(), notification.NotificationTypeListUpdated,
+	s.notify(ctx, notification.NotificationTypeListUpdated,
 		"Shopping list updated",
 		fmt.Sprintf("Shopping list %q was updated", list.Name),
 		list.HouseholdID, list.ID, 0, 0)
@@ -165,7 +163,7 @@ func (s *Service) Update(id uint, req *UpdateRequest) (*ShoppingList, error) {
 }
 
 // Delete removes a shopping list and all its items.
-func (s *Service) Delete(id uint) error {
+func (s *Service) Delete(ctx context.Context, id uint) error {
 	var list ShoppingList
 	if err := s.db.First(&list, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -194,7 +192,7 @@ func (s *Service) Delete(id uint) error {
 	s.invalidateList(list.ID, list.HouseholdID)
 
 	// Notify household members about the deleted list
-	s.notify(context.Background(), notification.NotificationTypeListDeleted,
+	s.notify(ctx, notification.NotificationTypeListDeleted,
 		"Shopping list deleted",
 		fmt.Sprintf("Shopping list %q was deleted", list.Name),
 		list.HouseholdID, list.ID, 0, 0)

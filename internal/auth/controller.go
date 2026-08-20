@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,15 +34,9 @@ func (c *Controller) Register(ctx *gin.Context) {
 
 	resp, err := c.service.Register(&req)
 	if err != nil {
-		msg := err.Error()
-		// Keep business-level errors descriptive; hide internal errors
-		if msg != "email already registered" {
-			slog.Error("auth register failed", "error", err)
-			msg = "internal server error"
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": msg})
-			return
-		}
-		ctx.JSON(http.StatusConflict, gin.H{"error": msg})
+		appErr := apperr.FromError(err)
+		slog.Error("auth register failed", "error", err)
+		ctx.JSON(appErr.Status, gin.H{"error": appErr.Message})
 		return
 	}
 
@@ -62,15 +57,9 @@ func (c *Controller) Login(ctx *gin.Context) {
 
 	resp, err := c.service.Login(&req)
 	if err != nil {
-		msg := err.Error()
-		// Keep auth failures descriptive; hide internal errors
-		if msg != "invalid email or password" {
-			slog.Error("auth login failed", "error", err)
-			msg = "internal server error"
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": msg})
-			return
-		}
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": msg})
+		appErr := apperr.FromError(err)
+		slog.Error("auth login failed", "error", err)
+		ctx.JSON(appErr.Status, gin.H{"error": appErr.Message})
 		return
 	}
 

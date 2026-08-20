@@ -15,7 +15,7 @@ on:
           - production
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.26.6"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -109,10 +109,24 @@ jobs:
           echo "| Workflow run | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
 
       - name: Deploy with kubectl
+        if: ${{ secrets.KUBE_CONFIG_DATA != '' }}
+        env:
+          IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
         run: |
-          echo "Deploying image ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }} to production..."
-          # kubectl set image deployment/needly-api api=ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
-          echo "Deployment submitted successfully."
+          mkdir -p "$HOME/.kube"
+          printf '%s' "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          export KUBECONFIG="$HOME/.kube/config"
+
+          kubectl set image deployment/needly-api api="$IMAGE" -n needly
+          kubectl rollout status deployment/needly-api -n needly --timeout=180s
+
+      - name: Deployment skipped without cluster config
+        if: ${{ secrets.KUBE_CONFIG_DATA == '' }}
+        run: |
+          echo "No KUBE_CONFIG_DATA configured; skipping kubectl deployment step."
+          echo "### Deployment status" >> "$GITHUB_STEP_SUMMARY"
+          echo "Skipped because Kubernetes credentials were not provided." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deployment complete
         run: |

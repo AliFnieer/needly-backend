@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/database"
@@ -18,6 +19,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	slog.SetDefault(observability.NewLogger(cfg.Tracing.LogLevel, os.Stdout).Logger)
 
 	// Initialize OpenTelemetry tracing
 	otlpEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -57,6 +59,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer redisClient.Close()
+
+	authSvc := auth.NewService(db, cfg)
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if _, err := authSvc.CleanupExpiredRefreshTokens(); err != nil {
+				slog.Warn("failed to cleanup expired refresh tokens", "error", err)
+			}
+		}
+	}()
 
 	srv := server.NewServer(cfg, db, redisClient)
 
