@@ -82,12 +82,12 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          # Pinned to match the local toolchain; "latest" floats across major
-          # versions and breaks the install step.
-          version: v1.64.8
-          args: --timeout=5m
+        # Pinned installer instead of golangci-lint-action@v6, whose install
+        # step started failing upstream regardless of requested version.
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
+
+      - name: Run golangci-lint
+        run: "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m
 
       - name: Run go vet
         run: go vet ./...
