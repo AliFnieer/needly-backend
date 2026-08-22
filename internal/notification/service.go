@@ -12,9 +12,6 @@ import (
 )
 
 const (
-	// notificationChannel is the Redis Pub/Sub channel for Notification delivery.
-	notificationChannel = "needly:notifications"
-
 	// notificationHistoryKeyPrefix is the Redis key prefix for recent notification history per household.
 	notificationHistoryKeyPrefix = "notifications:"
 
@@ -25,9 +22,9 @@ const (
 // Service delivers push notifications to household members via the WebSocket
 // hub and persists a short notification history in Redis.
 type Service struct {
-	hub    *websocket.Hub
-	redis  *redis.Client
-	cfg    *config.NotificationConfig
+	hub   *websocket.Hub
+	redis *redis.Client
+	cfg   *config.NotificationConfig
 }
 
 // NewService creates a push notification service.

@@ -47,10 +47,10 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	Secret              string
-	ExpirationHours     int
+	Secret               string
+	ExpirationHours      int
 	RefreshTokenTTLHours int
-	Issuer              string
+	Issuer               string
 }
 
 type CORSConfig struct {
@@ -112,10 +112,10 @@ func Load() *Config {
 			DB:       getEnvAsInt("REDIS_DB", 0),
 		},
 		JWT: JWTConfig{
-			Secret:              getEnv("JWT_SECRET", "your_super_secret_jwt_key_change_me"),
-			ExpirationHours:     getEnvAsInt("JWT_EXPIRATION_HOURS", 1),
+			Secret:               getEnv("JWT_SECRET", "your_super_secret_jwt_key_change_me"),
+			ExpirationHours:      getEnvAsInt("JWT_EXPIRATION_HOURS", 1),
 			RefreshTokenTTLHours: getEnvAsInt("JWT_REFRESH_TOKEN_TTL_HOURS", 720),
-			Issuer:              getEnv("JWT_ISSUER", "needly-api"),
+			Issuer:               getEnv("JWT_ISSUER", "needly-api"),
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),

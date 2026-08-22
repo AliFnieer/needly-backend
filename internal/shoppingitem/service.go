@@ -53,11 +53,11 @@ type CreateRequest struct {
 
 // UpdateRequest is the payload for updating a shopping item.
 type UpdateRequest struct {
-	Name        string   `json:"name" binding:"omitempty,min=1,max=200"`
-	Quantity    *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
-	Unit        string   `json:"unit" binding:"omitempty,min=1,max=50"`
-	CategoryID  *uint    `json:"category_id" binding:"omitempty"`
-	IsCompleted *bool    `json:"is_completed"`
+	Name           string   `json:"name" binding:"omitempty,min=1,max=200"`
+	Quantity       *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
+	Unit           string   `json:"unit" binding:"omitempty,min=1,max=50"`
+	CategoryID     *uint    `json:"category_id" binding:"omitempty"`
+	IsCompleted    *bool    `json:"is_completed"`
 	RecurrenceRule *string  `json:"recurrence_rule" binding:"omitempty,oneof=daily weekly biweekly monthly"`
 	// BaseUpdatedAt enables optimistic concurrency for offline clients:
 	// when provided and it does not match the stored updated_at, the update

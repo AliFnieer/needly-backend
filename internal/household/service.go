@@ -407,10 +407,10 @@ func (s *Service) invalidateHouseholdCache(householdID uint) {
 
 	// Direct keys
 	keys := []string{
-		fmt.Sprintf("%s%d", householdCacheKeyPrefix, householdID),          // household:<id>
+		fmt.Sprintf("%s%d", householdCacheKeyPrefix, householdID),             // household:<id>
 		fmt.Sprintf("%s%d%s", householdCacheKeyPrefix, householdID, ":lists"), // household:<id>:lists
-		fmt.Sprintf("categories:household:%d", householdID),                // categories:household:<id>
-		fmt.Sprintf("notifications:%d:history", householdID),               // notifications:<id>:history
+		fmt.Sprintf("categories:household:%d", householdID),                   // categories:household:<id>
+		fmt.Sprintf("notifications:%d:history", householdID),                  // notifications:<id>:history
 	}
 	for _, key := range keys {
 		if err := s.cache.Delete(ctx, key); err != nil {
@@ -420,11 +420,11 @@ func (s *Service) invalidateHouseholdCache(householdID uint) {
 
 	// Pattern-based keys
 	patterns := []string{
-		householdListCacheKey + "*",          // households:user:*
+		householdListCacheKey + "*",               // households:user:*
 		fmt.Sprintf("category:%d:*", householdID), // category:<id>:*
-		fmt.Sprintf("shoppinglist:*"),         // shoppinglist:<id> (all lists in household)
-		fmt.Sprintf("list:*:items"),           // list:<id>:items
-		fmt.Sprintf("shoppingitem:*"),         // shoppingitem:<id>
+		"shoppinglist:*",                          // shoppinglist:<id> (all lists in household)
+		"list:*:items",                            // list:<id>:items
+		"shoppingitem:*",                          // shoppingitem:<id>
 	}
 	for _, pattern := range patterns {
 		if err := s.cache.DeleteByPattern(ctx, pattern); err != nil {

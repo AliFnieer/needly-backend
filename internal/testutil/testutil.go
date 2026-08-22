@@ -7,8 +7,8 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/config"
-	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/history"
+	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
 	"gorm.io/driver/sqlite"
@@ -24,10 +24,10 @@ func TestConfig() *config.Config {
 			GinMode: "test",
 		},
 		JWT: config.JWTConfig{
-			Secret:              "test-secret-key-for-testing-only-32chars!",
-			ExpirationHours:     1,
+			Secret:               "test-secret-key-for-testing-only-32chars!",
+			ExpirationHours:      1,
 			RefreshTokenTTLHours: 720,
-			Issuer:              "needly-api",
+			Issuer:               "needly-api",
 		},
 		Notification: config.NotificationConfig{
 			Enabled:          false,

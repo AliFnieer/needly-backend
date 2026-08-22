@@ -26,7 +26,7 @@ func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
 	// Get authenticated user ID from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		conn.WriteMessage(gorilla.CloseMessage,
+		_ = conn.WriteMessage(gorilla.CloseMessage,
 			gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "unauthenticated"))
 		conn.Close()
 		return
@@ -34,7 +34,7 @@ func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
 
 	uid, ok := userID.(float64)
 	if !ok {
-		conn.WriteMessage(gorilla.CloseMessage,
+		_ = conn.WriteMessage(gorilla.CloseMessage,
 			gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "invalid user id"))
 		conn.Close()
 		return
@@ -46,7 +46,7 @@ func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
 	if hidStr != "" {
 		v, err := strconv.ParseUint(hidStr, 10, 64)
 		if err != nil {
-			conn.WriteMessage(gorilla.CloseMessage,
+			_ = conn.WriteMessage(gorilla.CloseMessage,
 				gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "invalid household_id"))
 			conn.Close()
 			return
@@ -55,7 +55,7 @@ func ServeWS(h *Hub, c *gin.Context, db *gorm.DB, cfg *config.Config) {
 
 		// Verify the user is a member of this household
 		if err := verifyHouseholdMembership(db, hid, uint(uid)); err != nil {
-			conn.WriteMessage(gorilla.CloseMessage,
+			_ = conn.WriteMessage(gorilla.CloseMessage,
 				gorilla.FormatCloseMessage(gorilla.ClosePolicyViolation, "not a household member"))
 			conn.Close()
 			return

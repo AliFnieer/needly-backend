@@ -36,9 +36,9 @@ func APIVersionMiddleware() gin.HandlerFunc {
 
 		if !supported[version] {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error":          "unsupported API version",
-				"supported":      SupportedVersions,
-				"current":        CurrentAPIVersion,
+				"error":     "unsupported API version",
+				"supported": SupportedVersions,
+				"current":   CurrentAPIVersion,
 			})
 			c.Abort()
 			return

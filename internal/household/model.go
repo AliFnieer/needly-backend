@@ -29,12 +29,12 @@ func (Household) TableName() string {
 
 // HouseholdMember links a user to a household with a role.
 type HouseholdMember struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	HouseholdID uint       `gorm:"not null;index" json:"household_id"`
-	UserID      uint       `gorm:"not null;index" json:"user_id"`
-	Role        Role       `gorm:"size:20;not null;default:member" json:"role"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	HouseholdID uint      `gorm:"not null;index" json:"household_id"`
+	UserID      uint      `gorm:"not null;index" json:"user_id"`
+	Role        Role      `gorm:"size:20;not null;default:member" json:"role"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // TableName overrides the default table name for GORM.

@@ -143,8 +143,10 @@ func TestListByListID(t *testing.T) {
 	svc := shoppingitem.NewService(db, nil, nil, nil)
 	ctx := context.Background()
 
-	svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item A"})
-	svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item B"})
+	_, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item A"})
+	require.NoError(t, err)
+	_, err = svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Item B"})
+	require.NoError(t, err)
 
 	items, err := svc.ListByListID(ctx, listID)
 	require.NoError(t, err)

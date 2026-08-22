@@ -13,10 +13,10 @@ import (
 func testServiceConfig() *config.Config {
 	return &config.Config{
 		JWT: config.JWTConfig{
-			Secret:              "test-secret-key-for-testing-only-32chars!",
-			ExpirationHours:     1,
+			Secret:               "test-secret-key-for-testing-only-32chars!",
+			ExpirationHours:      1,
 			RefreshTokenTTLHours: 720,
-			Issuer:              "needly-api",
+			Issuer:               "needly-api",
 		},
 	}
 }

@@ -20,14 +20,14 @@ const (
 
 // CircuitBreaker provides failure-rate-based circuit breaking.
 type CircuitBreaker struct {
-	mu               sync.Mutex
-	state            CircuitState
-	failures         int
-	successes        int
-	threshold        int           // failures before opening
-	resetTimeout     time.Duration // time before trying half-open
-	halfOpenMax      int           // successful requests needed to close
-	lastFailureTime  time.Time
+	mu              sync.Mutex
+	state           CircuitState
+	failures        int
+	successes       int
+	threshold       int           // failures before opening
+	resetTimeout    time.Duration // time before trying half-open
+	halfOpenMax     int           // successful requests needed to close
+	lastFailureTime time.Time
 }
 
 // CircuitBreakerConfig configures the circuit breaker.

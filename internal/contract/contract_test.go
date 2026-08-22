@@ -159,7 +159,7 @@ func specHasResponseStatusCode(path, method string, statusCode int) bool {
 	if !ok {
 		return false
 	}
- operation, ok := pathItem[method].(map[string]interface{})
+	operation, ok := pathItem[method].(map[string]interface{})
 	if !ok {
 		return false
 	}

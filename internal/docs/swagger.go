@@ -12,7 +12,7 @@ var openAPISpec []byte
 // ServeOpenAPIHandler serves the OpenAPI specification as JSON.
 func ServeOpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(openAPISpec)
+	_, _ = w.Write(openAPISpec)
 }
 
 // SwaggerUIHandler serves a simple Swagger UI page that loads the OpenAPI spec.
@@ -47,7 +47,7 @@ func SwaggerUIHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(html))
+		_, _ = w.Write([]byte(html))
 	})
 }
 
@@ -72,7 +72,7 @@ func RedocUIHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(html))
+		_, _ = w.Write([]byte(html))
 	})
 }
 

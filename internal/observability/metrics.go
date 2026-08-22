@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -15,7 +16,7 @@ type Metrics struct {
 	HTTPActiveRequests  prometheus.Gauge
 
 	// Database metrics
-	DBQueriesTotal   *prometheus.CounterVec
+	DBQueriesTotal  *prometheus.CounterVec
 	DBQueryDuration *prometheus.HistogramVec
 	DBErrorsTotal   *prometheus.CounterVec
 
@@ -39,8 +40,8 @@ type Metrics struct {
 // NewMetrics creates and registers all Prometheus metrics.
 func NewMetrics() *Metrics {
 	reg := prometheus.NewRegistry()
-	reg.MustRegister(prometheus.NewGoCollector())
-	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	reg.MustRegister(collectors.NewGoCollector())
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	m := &Metrics{
 		HTTPRequestsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{

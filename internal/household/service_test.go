@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/history"
+	"github.com/AliFnieer/needly-backend/internal/household"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
 	"github.com/AliFnieer/needly-backend/internal/testutil"
@@ -70,9 +70,9 @@ func TestListByUser(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h1, _ := svc.Create(user1.ID, &household.CreateRequest{Name: "User1 Household"})
-	svc.Create(user2.ID, &household.CreateRequest{Name: "User2 Household"})
+	_, _ = svc.Create(user2.ID, &household.CreateRequest{Name: "User2 Household"})
 
-	svc.AddMember(h1.ID, user1.ID, &household.AddMemberRequest{UserID: user2.ID})
+	_, _ = svc.AddMember(h1.ID, user1.ID, &household.AddMemberRequest{UserID: user2.ID})
 
 	lists, err := svc.ListByUser(user1.ID)
 	if err != nil {
@@ -122,7 +122,7 @@ func TestUpdateNonOwnerFails(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
 
 	_, err := svc.Update(h.ID, member.ID, &household.UpdateRequest{Name: "Hacked"})
 	if err == nil {
@@ -155,7 +155,7 @@ func TestDeleteNonOwnerFails(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
 
 	err := svc.Delete(h.ID, member.ID)
 	if err == nil {
@@ -196,7 +196,7 @@ func TestAddMemberNonOwnerFails(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
 
 	_, err := svc.AddMember(h.ID, member.ID, &household.AddMemberRequest{UserID: third.ID})
 	if err == nil {
@@ -211,7 +211,7 @@ func TestRemoveMember(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
 
 	err := svc.RemoveMember(h.ID, owner.ID, member.ID)
 	if err != nil {
@@ -259,8 +259,8 @@ func TestRemoveMemberNonOwnerFails(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: third.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: third.ID})
 
 	err := svc.RemoveMember(h.ID, member.ID, third.ID)
 	if err == nil {
@@ -276,7 +276,7 @@ func TestCheckMember(t *testing.T) {
 	svc := household.NewService(db, nil, nil)
 
 	h, _ := svc.Create(owner.ID, &household.CreateRequest{Name: "Household"})
-	svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
+	_, _ = svc.AddMember(h.ID, owner.ID, &household.AddMemberRequest{UserID: member.ID})
 
 	if !svc.CheckMember(h.ID, owner.ID) {
 		t.Error("owner should be a member")
@@ -327,9 +327,9 @@ func TestHouseholdIDForItem(t *testing.T) {
 	db.Create(&list)
 
 	item := shoppingitem.ShoppingItem{
-		ListID:   list.ID,
-		Name:     "Milk",
-		Quantity: 2,
+		ListID:    list.ID,
+		Name:      "Milk",
+		Quantity:  2,
 		CreatedBy: user.ID,
 	}
 	db.Create(&item)

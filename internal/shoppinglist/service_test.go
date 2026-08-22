@@ -69,9 +69,9 @@ func TestListByHouseholdID(t *testing.T) {
 
 	hh, _ := hhSvc.Create(user.ID, &household.CreateRequest{Name: "Household"})
 
-	svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "First"})
-	svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Second"})
-	svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Third"})
+	_, _ = svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "First"})
+	_, _ = svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Second"})
+	_, _ = svc.Create(ctx, hh.ID, user.ID, &shoppinglist.CreateRequest{Name: "Third"})
 
 	lists, err := svc.ListByHouseholdID(ctx, hh.ID)
 	if err != nil {

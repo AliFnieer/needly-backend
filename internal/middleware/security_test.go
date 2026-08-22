@@ -94,7 +94,7 @@ func TestSecurityMiddleware_SetsAdditionalHeaders(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	checks := map[string]string{
-		"X-XSS-Protection":  "0",
+		"X-XSS-Protection":   "0",
 		"Referrer-Policy":    "strict-origin-when-cross-origin",
 		"Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 	}

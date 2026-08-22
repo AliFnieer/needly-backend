@@ -9,14 +9,14 @@ import (
 type Code string
 
 const (
-	CodeValidation    Code = "VALIDATION"
-	CodeNotFound      Code = "NOT_FOUND"
-	CodeConflict      Code = "CONFLICT"
-	CodeUnauthorized  Code = "UNAUTHORIZED"
-	CodeForbidden     Code = "FORBIDDEN"
-	CodeInternal      Code = "INTERNAL"
-	CodeRateLimited   Code = "RATE_LIMITED"
-	CodeUnavailable   Code = "UNAVAILABLE"
+	CodeValidation   Code = "VALIDATION"
+	CodeNotFound     Code = "NOT_FOUND"
+	CodeConflict     Code = "CONFLICT"
+	CodeUnauthorized Code = "UNAUTHORIZED"
+	CodeForbidden    Code = "FORBIDDEN"
+	CodeInternal     Code = "INTERNAL"
+	CodeRateLimited  Code = "RATE_LIMITED"
+	CodeUnavailable  Code = "UNAVAILABLE"
 )
 
 // AppError is a structured application error that carries an HTTP status,

@@ -597,7 +597,7 @@ func TestFullLifecycle(t *testing.T) {
 	// 4. Add items
 	for _, name := range []string{"Milk", "Eggs", "Bread"} {
 		catUint := uint(0)
-		fmt.Sscanf(catID, "%d", &catUint)
+		_, _ = fmt.Sscanf(catID, "%d", &catUint)
 		w = s.doRequest("POST", fmt.Sprintf("/api/v1/lists/%s/items", listID), map[string]interface{}{
 			"name":        name,
 			"quantity":    1,

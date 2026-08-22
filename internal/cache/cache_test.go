@@ -65,7 +65,7 @@ func TestCache_SetGetRoundTrip(t *testing.T) {
 	}
 
 	// Cleanup
-	c.Delete(context.Background(), key)
+	_ = c.Delete(context.Background(), key)
 }
 
 func TestCache_CacheMiss(t *testing.T) {
