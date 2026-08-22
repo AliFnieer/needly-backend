@@ -34,6 +34,8 @@ const (
 	NotificationTypeItemDeleted NotificationType = "item.deleted"
 	// NotificationTypeItemReAdded is sent when an item is re-added from history.
 	NotificationTypeItemReAdded NotificationType = "item.radded"
+	// NotificationTypeItemRecurred is sent when a recurring item becomes due again.
+	NotificationTypeItemRecurred NotificationType = "item.recurred"
 )
 
 // Notification is a push notification broadcast to household members.

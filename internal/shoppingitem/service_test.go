@@ -3,8 +3,10 @@ package shoppingitem_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/category"
+	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -324,4 +326,267 @@ func TestReAddFromHistory_NotFound(t *testing.T) {
 	_, err := svc.ReAddFromHistory(ctx, 9999, 1)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestCreate_WithRecurrenceRule(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "create_recur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Milk",
+		RecurrenceRule: "weekly",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "weekly", item.RecurrenceRule)
+	assert.Nil(t, item.NextDueAt)
+
+	var stored shoppingitem.ShoppingItem
+	require.NoError(t, db.First(&stored, item.ID).Error)
+	assert.Equal(t, "weekly", stored.RecurrenceRule)
+}
+
+func TestCreate_InvalidRecurrenceRule(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "create_badrecur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Milk",
+		RecurrenceRule: "hourly",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid recurrence rule")
+}
+
+func TestUpdate_SetAndClearRecurrence(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "update_recur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Bread"})
+	require.NoError(t, err)
+	assert.Empty(t, item.RecurrenceRule)
+
+	monthly := "monthly"
+	updated, err := svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{RecurrenceRule: &monthly})
+	require.NoError(t, err)
+	assert.Equal(t, "monthly", updated.RecurrenceRule)
+
+	clear := ""
+	updated2, err := svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{RecurrenceRule: &clear})
+	require.NoError(t, err)
+	assert.Empty(t, updated2.RecurrenceRule)
+	assert.Nil(t, updated2.NextDueAt)
+}
+
+func TestUpdate_InvalidRecurrenceRule(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "update_badrecur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Eggs"})
+	require.NoError(t, err)
+
+	bad := "fortnightly"
+	_, err = svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{RecurrenceRule: &bad})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid recurrence rule")
+}
+
+func TestUpdateCompleted_Recurring_SetsNextDueAt(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "comp_recur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, history.NewService(db), nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Milk",
+		RecurrenceRule: "weekly",
+	})
+	require.NoError(t, err)
+
+	before := time.Now().UTC()
+	completed, err := svc.UpdateCompleted(ctx, item.ID, user.ID, true)
+	require.NoError(t, err)
+	assert.True(t, completed.IsCompleted)
+	require.NotNil(t, completed.NextDueAt)
+
+	expected := before.AddDate(0, 0, 7)
+	assert.WithinDuration(t, expected, *completed.NextDueAt, 5*time.Second)
+
+	var historyCount int64
+	require.NoError(t, db.Model(&history.ShoppingHistory{}).Where("name = ?", "Milk").Count(&historyCount).Error)
+	assert.EqualValues(t, 1, historyCount)
+
+	// Completing again must not duplicate the history entry
+	_, err = svc.UpdateCompleted(ctx, item.ID, user.ID, true)
+	require.NoError(t, err)
+	require.NoError(t, db.Model(&history.ShoppingHistory{}).Where("name = ?", "Milk").Count(&historyCount).Error)
+	assert.EqualValues(t, 1, historyCount)
+}
+
+func TestUpdateCompleted_Recurring_UncompleteClearsNextDueAt(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "uncomp_recur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Milk",
+		RecurrenceRule: "daily",
+	})
+	require.NoError(t, err)
+
+	completed, err := svc.UpdateCompleted(ctx, item.ID, user.ID, true)
+	require.NoError(t, err)
+	require.NotNil(t, completed.NextDueAt)
+
+	reopened, err := svc.UpdateCompleted(ctx, item.ID, user.ID, false)
+	require.NoError(t, err)
+	assert.False(t, reopened.IsCompleted)
+	assert.Nil(t, reopened.NextDueAt)
+}
+
+func TestUpdateCompleted_NonRecurring_NextDueAtStaysNil(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "comp_plain@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Chips"})
+	require.NoError(t, err)
+
+	completed, err := svc.UpdateCompleted(ctx, item.ID, user.ID, true)
+	require.NoError(t, err)
+	assert.True(t, completed.IsCompleted)
+	assert.Empty(t, completed.RecurrenceRule)
+	assert.Nil(t, completed.NextDueAt)
+}
+
+func TestUpdate_CompletingRecurring_SetsNextDueAt(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "upd_comp_recur@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Coffee",
+		RecurrenceRule: "biweekly",
+	})
+	require.NoError(t, err)
+
+	complete := true
+	before := time.Now().UTC()
+	updated, err := svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{IsCompleted: &complete})
+	require.NoError(t, err)
+	assert.True(t, updated.IsCompleted)
+	require.NotNil(t, updated.NextDueAt)
+	assert.WithinDuration(t, before.AddDate(0, 0, 14), *updated.NextDueAt, 5*time.Second)
+}
+
+func TestListByListID_RollsOverDueItems(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "rollover@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	dueItem, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Milk",
+		RecurrenceRule: "daily",
+	})
+	require.NoError(t, err)
+	notDueItem, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Rice",
+		RecurrenceRule: "weekly",
+	})
+	require.NoError(t, err)
+
+	// Complete both items
+	_, err = svc.UpdateCompleted(ctx, dueItem.ID, user.ID, true)
+	require.NoError(t, err)
+	_, err = svc.UpdateCompleted(ctx, notDueItem.ID, user.ID, true)
+	require.NoError(t, err)
+
+	// Rewind one item's due date into the past
+	past := time.Now().Add(-2 * time.Hour).UTC()
+	require.NoError(t, db.Model(&shoppingitem.ShoppingItem{}).Where("id = ?", dueItem.ID).
+		Update("next_due_at", past).Error)
+
+	items, err := svc.ListByListID(ctx, listID)
+	require.NoError(t, err)
+
+	byName := make(map[string]shoppingitem.ShoppingItem, len(items))
+	for _, it := range items {
+		byName[it.Name] = it
+	}
+
+	milk := byName["Milk"]
+	assert.False(t, milk.IsCompleted)
+	assert.Nil(t, milk.NextDueAt)
+
+	rice := byName["Rice"]
+	assert.True(t, rice.IsCompleted)
+	require.NotNil(t, rice.NextDueAt)
+
+	// The rollover persists across subsequent fetches
+	items2, err := svc.ListByListID(ctx, listID)
+	require.NoError(t, err)
+	for _, it := range items2 {
+		if it.Name == "Milk" {
+			assert.False(t, it.IsCompleted)
+			assert.Nil(t, it.NextDueAt)
+		}
+	}
+}
+
+func TestListByListID_RolloverPersistsToDB(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "rollover_db@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{
+		Name:           "Water",
+		RecurrenceRule: "biweekly",
+	})
+	require.NoError(t, err)
+	_, err = svc.UpdateCompleted(ctx, item.ID, user.ID, true)
+	require.NoError(t, err)
+
+	past := time.Now().Add(-24 * time.Hour).UTC()
+	require.NoError(t, db.Model(&shoppingitem.ShoppingItem{}).Where("id = ?", item.ID).
+		Update("next_due_at", past).Error)
+
+	_, err = svc.ListByListID(ctx, listID)
+	require.NoError(t, err)
+
+	var stored shoppingitem.ShoppingItem
+	require.NoError(t, db.First(&stored, item.ID).Error)
+	assert.False(t, stored.IsCompleted)
+	assert.Nil(t, stored.NextDueAt)
 }

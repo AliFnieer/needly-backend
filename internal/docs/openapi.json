@@ -2353,6 +2353,15 @@
           "is_completed": {
             "type": "boolean"
           },
+          "recurrence_rule": {
+            "type": "string",
+            "enum": ["", "daily", "weekly", "biweekly", "monthly"]
+          },
+          "next_due_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "created_by": {
             "type": "integer"
           },
@@ -2392,6 +2401,10 @@
           },
           "is_completed": {
             "type": "boolean"
+          },
+          "recurrence_rule": {
+            "type": "string",
+            "enum": ["daily", "weekly", "biweekly", "monthly"]
           }
         }
       },
@@ -2417,6 +2430,11 @@
           },
           "is_completed": {
             "type": "boolean"
+          },
+          "recurrence_rule": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["", "daily", "weekly", "biweekly", "monthly"]
           }
         }
       },

@@ -407,6 +407,18 @@ DELETE /api/v1/history/:id                       # Delete a history entry
 
 Completed items are automatically recorded in history with a snapshot of the item data, who completed it, and when. History entries are preserved even if the original item is deleted.
 
+#### Recurring items
+
+Items can optionally recur (`daily`, `weekly`, `biweekly`, `monthly`) via the `recurrence_rule` field on create/update. When a recurring item is completed, it stays completed but is scheduled with `next_due_at`. Once that time passes, the item automatically reappears as active on the list (evaluated lazily on list fetch) and household members are notified. Setting `recurrence_rule` to `""` stops recurrence.
+
+```json
+{
+  "name": "Milk",
+  "quantity": 2,
+  "recurrence_rule": "weekly"
+}
+```
+
 ### Notifications
 
 ```text
@@ -637,7 +649,7 @@ User B can see the change immediately without refreshing the application.
 
 ### v0.3
 
-* [ ] Recurring items
+* [x] Recurring items
 * [x] Push notifications
 * [ ] Offline synchronization
 * [x] Redis Pub/Sub

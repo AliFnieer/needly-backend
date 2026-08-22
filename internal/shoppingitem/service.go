@@ -6,12 +6,21 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/notification"
 	"gorm.io/gorm"
+)
+
+// Supported recurrence rules for shopping items.
+const (
+	RecurrenceDaily    = "daily"
+	RecurrenceWeekly   = "weekly"
+	RecurrenceBiweekly = "biweekly"
+	RecurrenceMonthly  = "monthly"
 )
 
 const (
@@ -33,20 +42,22 @@ type Service struct {
 
 // CreateRequest is the payload for creating a shopping item.
 type CreateRequest struct {
-	Name        string  `json:"name" binding:"required,min=1,max=200"`
-	Quantity    float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
-	Unit        string  `json:"unit" binding:"omitempty,min=1,max=50"`
-	CategoryID  *uint   `json:"category_id" binding:"omitempty"`
-	IsCompleted bool    `json:"is_completed"`
+	Name           string  `json:"name" binding:"required,min=1,max=200"`
+	Quantity       float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
+	Unit           string  `json:"unit" binding:"omitempty,min=1,max=50"`
+	CategoryID     *uint   `json:"category_id" binding:"omitempty"`
+	IsCompleted    bool    `json:"is_completed"`
+	RecurrenceRule string  `json:"recurrence_rule" binding:"omitempty,oneof=daily weekly biweekly monthly"`
 }
 
 // UpdateRequest is the payload for updating a shopping item.
 type UpdateRequest struct {
-	Name        string   `json:"name" binding:"omitempty,min=1,max=200"`
-	Quantity    *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
-	Unit        string   `json:"unit" binding:"omitempty,min=1,max=50"`
-	CategoryID  *uint    `json:"category_id" binding:"omitempty"`
-	IsCompleted *bool    `json:"is_completed"`
+	Name           string   `json:"name" binding:"omitempty,min=1,max=200"`
+	Quantity       *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
+	Unit           string   `json:"unit" binding:"omitempty,min=1,max=50"`
+	CategoryID     *uint    `json:"category_id" binding:"omitempty"`
+	IsCompleted    *bool    `json:"is_completed"`
+	RecurrenceRule *string  `json:"recurrence_rule" binding:"omitempty,oneof=daily weekly biweekly monthly"`
 }
 
 // NewService creates a new shopping item service.
@@ -75,6 +86,33 @@ func (s *Service) validateCategoryID(categoryID *uint, householdID uint) error {
 	return nil
 }
 
+// validateRecurrenceRule checks that a recurrence rule is supported.
+// The empty string means "does not recur" and is always valid.
+func validateRecurrenceRule(rule string) error {
+	switch rule {
+	case "", RecurrenceDaily, RecurrenceWeekly, RecurrenceBiweekly, RecurrenceMonthly:
+		return nil
+	default:
+		return fmt.Errorf("invalid recurrence rule %q (allowed: daily, weekly, biweekly, monthly)", rule)
+	}
+}
+
+// computeNextDue returns the next due timestamp for a recurrence rule.
+func computeNextDue(rule string, from time.Time) time.Time {
+	switch rule {
+	case RecurrenceDaily:
+		return from.AddDate(0, 0, 1)
+	case RecurrenceWeekly:
+		return from.AddDate(0, 0, 7)
+	case RecurrenceBiweekly:
+		return from.AddDate(0, 0, 14)
+	case RecurrenceMonthly:
+		return from.AddDate(1, 0, 0)
+	default:
+		return from
+	}
+}
+
 // Create adds a new item to a shopping list.
 func (s *Service) Create(ctx context.Context, listID, userID uint, req *CreateRequest) (*ShoppingItem, error) {
 	quantity := req.Quantity
@@ -89,6 +127,11 @@ func (s *Service) Create(ctx context.Context, listID, userID uint, req *CreateRe
 		return nil, err
 	}
 
+	recurrenceRule := strings.ToLower(strings.TrimSpace(req.RecurrenceRule))
+	if err := validateRecurrenceRule(recurrenceRule); err != nil {
+		return nil, err
+	}
+
 	unit := strings.TrimSpace(req.Unit)
 
 	var categoryID *uint
@@ -97,13 +140,14 @@ func (s *Service) Create(ctx context.Context, listID, userID uint, req *CreateRe
 	}
 
 	item := ShoppingItem{
-		ListID:      listID,
-		CategoryID:  categoryID,
-		Name:        req.Name,
-		Quantity:    quantity,
-		Unit:        unit,
-		IsCompleted: req.IsCompleted,
-		CreatedBy:   userID,
+		ListID:         listID,
+		CategoryID:     categoryID,
+		Name:           req.Name,
+		Quantity:       quantity,
+		Unit:           unit,
+		IsCompleted:    req.IsCompleted,
+		RecurrenceRule: recurrenceRule,
+		CreatedBy:      userID,
 	}
 
 	if err := s.db.Create(&item).Error; err != nil {
@@ -158,6 +202,9 @@ func (s *Service) GetByID(ctx context.Context, id uint) (*ShoppingItem, error) {
 
 // ListByListID retrieves all items in a shopping list.
 func (s *Service) ListByListID(ctx context.Context, listID uint) ([]ShoppingItem, error) {
+	// Roll over recurring items that became due since the last fetch
+	s.rollOverDueItems(ctx, listID)
+
 	cacheKey := listItemsCacheKey(listID)
 
 	// Try cache first
@@ -219,14 +266,36 @@ func (s *Service) Update(ctx context.Context, id, userID uint, req *UpdateReques
 			item.CategoryID = req.CategoryID
 		}
 	}
+	if req.RecurrenceRule != nil {
+		rule := strings.ToLower(strings.TrimSpace(*req.RecurrenceRule))
+		if err := validateRecurrenceRule(rule); err != nil {
+			return nil, err
+		}
+		item.RecurrenceRule = rule
+		if rule == "" {
+			item.NextDueAt = nil
+		} else if item.IsCompleted {
+			nextDue := computeNextDue(rule, time.Now().UTC())
+			item.NextDueAt = &nextDue
+		}
+	}
 	if req.IsCompleted != nil {
+		completing := *req.IsCompleted && !item.IsCompleted
+
 		// Record history when transitioning to completed
-		if *req.IsCompleted && !item.IsCompleted && s.history != nil {
+		if completing && s.history != nil {
 			if _, err := s.history.Record(item.ListID, item.ID, userID, item.Name, item.Quantity, item.Unit, item.CategoryID); err != nil {
 				return nil, fmt.Errorf("failed to record shopping history: %w", err)
 			}
 		}
+
 		item.IsCompleted = *req.IsCompleted
+		if completing && item.RecurrenceRule != "" {
+			nextDue := computeNextDue(item.RecurrenceRule, time.Now().UTC())
+			item.NextDueAt = &nextDue
+		} else if !item.IsCompleted {
+			item.NextDueAt = nil
+		}
 	}
 
 	if err := s.db.Save(&item).Error; err != nil {
@@ -256,14 +325,24 @@ func (s *Service) UpdateCompleted(ctx context.Context, id, userID uint, isComple
 		return nil, fmt.Errorf("failed to get shopping item: %w", err)
 	}
 
+	completing := isCompleted && !item.IsCompleted
+
 	// Record history when transitioning to completed
-	if isCompleted && !item.IsCompleted && s.history != nil {
+	if completing && s.history != nil {
 		if _, err := s.history.Record(item.ListID, item.ID, userID, item.Name, item.Quantity, item.Unit, item.CategoryID); err != nil {
 			return nil, fmt.Errorf("failed to record shopping history: %w", err)
 		}
 	}
 
 	item.IsCompleted = isCompleted
+	if completing && item.RecurrenceRule != "" {
+		// Recurring items stay completed but are scheduled to reappear.
+		nextDue := computeNextDue(item.RecurrenceRule, time.Now().UTC())
+		item.NextDueAt = &nextDue
+	} else if !isCompleted {
+		item.NextDueAt = nil
+	}
+
 	if err := s.db.Save(&item).Error; err != nil {
 		return nil, fmt.Errorf("failed to update shopping item status: %w", err)
 	}
@@ -353,6 +432,50 @@ func (s *Service) ReAddFromHistory(ctx context.Context, historyID, userID uint) 
 		householdID, item.ListID, item.ID, userID)
 
 	return &item, nil
+}
+
+// rollOverDueItems resets completed recurring items whose due date has passed,
+// making them active on the list again. It is evaluated lazily whenever a
+// household fetches its list, so no scheduler is required.
+func (s *Service) rollOverDueItems(ctx context.Context, listID uint) {
+	now := time.Now()
+
+	var due []ShoppingItem
+	if err := s.db.Where(
+		"list_id = ? AND is_completed = ? AND recurrence_rule <> '' AND next_due_at IS NOT NULL AND next_due_at <= ?",
+		listID, true, now,
+	).Find(&due).Error; err != nil {
+		slog.Error("failed to find due recurring items", "list_id", listID, "error", err)
+		return
+	}
+	if len(due) == 0 {
+		return
+	}
+
+	householdID := s.householdIDForList(listID)
+
+	rolled := 0
+	for i := range due {
+		due[i].IsCompleted = false
+		due[i].NextDueAt = nil
+
+		if err := s.db.Save(&due[i]).Error; err != nil {
+			slog.Error("failed to roll over recurring item", "item_id", due[i].ID, "error", err)
+			continue
+		}
+		rolled++
+
+		s.invalidateItem(due[i].ID, listID)
+
+		s.notify(ctx, notification.NotificationTypeItemRecurred,
+			"Recurring item due again",
+			fmt.Sprintf("Item %q is back on the list", due[i].Name),
+			householdID, listID, due[i].ID, due[i].CreatedBy)
+	}
+
+	if rolled > 0 {
+		s.invalidateListItems(listID)
+	}
 }
 
 // notify delivers a notification to all household members.
