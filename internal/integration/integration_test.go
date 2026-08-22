@@ -485,6 +485,14 @@ func TestShoppingItem_CRUD(t *testing.T) {
 		t.Fatalf("complete failed: %d %s", w5.Code, w5.Body.String())
 	}
 
+	// Un-complete (regression: is_completed=false used to fail binding validation)
+	w5b := s.doRequest("PATCH", "/api/v1/items/"+itemID+"/completed", map[string]bool{
+		"is_completed": false,
+	}, authHeaders(token))
+	if w5b.Code != http.StatusOK {
+		t.Fatalf("un-complete failed: %d %s", w5b.Code, w5b.Body.String())
+	}
+
 	// History should exist now
 	w6 := s.doRequest("GET", fmt.Sprintf("/api/v1/lists/%s/history", listID), nil, authHeaders(token))
 	if w6.Code != http.StatusOK {

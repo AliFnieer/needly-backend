@@ -166,7 +166,7 @@ func (ctl *Controller) SetCompleted(c *gin.Context) {
 	}
 
 	var req struct {
-		IsCompleted bool `json:"is_completed" binding:"required"`
+		IsCompleted *bool `json:"is_completed" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -175,7 +175,7 @@ func (ctl *Controller) SetCompleted(c *gin.Context) {
 		return
 	}
 
-	item, err := ctl.service.UpdateCompleted(c.Request.Context(), id, userID, req.IsCompleted)
+	item, err := ctl.service.UpdateCompleted(c.Request.Context(), id, userID, *req.IsCompleted)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
