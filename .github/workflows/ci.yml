@@ -82,9 +82,10 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        # Pinned installer instead of golangci-lint-action@v6, whose install
-        # step started failing upstream regardless of requested version.
-        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
+        # Built from source via the Go module proxy (same channel as
+        # `go mod download`); the release-asset installers kept failing on
+        # runners regardless of pinned version.
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
 
       - name: Run golangci-lint
         run: "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m
