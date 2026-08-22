@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- Create households table
 CREATE TABLE IF NOT EXISTS households (
     id         BIGSERIAL PRIMARY KEY,
@@ -21,3 +23,7 @@ CREATE TABLE IF NOT EXISTS household_members (
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_household_members_household_id ON household_members (household_id);
 CREATE INDEX IF NOT EXISTS idx_household_members_user_id ON household_members (user_id);
+
+-- +goose Down
+DROP TABLE IF EXISTS household_members;
+DROP TABLE IF EXISTS households;

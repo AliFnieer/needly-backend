@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- Create shopping_items table
 CREATE TABLE IF NOT EXISTS shopping_items (
     id           BIGSERIAL PRIMARY KEY,
@@ -13,3 +15,6 @@ CREATE TABLE IF NOT EXISTS shopping_items (
 
 -- Create index for performance
 CREATE INDEX IF NOT EXISTS idx_shopping_items_list_id ON shopping_items (list_id);
+
+-- +goose Down
+DROP TABLE IF EXISTS shopping_items;

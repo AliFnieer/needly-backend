@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- Create categories table
 CREATE TABLE IF NOT EXISTS categories (
     id         BIGSERIAL PRIMARY KEY,
@@ -8,3 +10,6 @@ CREATE TABLE IF NOT EXISTS categories (
 
 -- Create index for performance
 CREATE INDEX IF NOT EXISTS idx_categories_name ON categories (name);
+
+-- +goose Down
+DROP TABLE IF EXISTS categories;

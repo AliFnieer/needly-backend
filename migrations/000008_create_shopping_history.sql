@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- Create shopping_history table
 CREATE TABLE IF NOT EXISTS shopping_history (
     id          BIGSERIAL PRIMARY KEY,
@@ -17,3 +19,6 @@ CREATE TABLE IF NOT EXISTS shopping_history (
 CREATE INDEX IF NOT EXISTS idx_shopping_history_list_id ON shopping_history (list_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_history_item_id ON shopping_history (item_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_history_completed_at ON shopping_history (completed_at DESC);
+
+-- +goose Down
+DROP TABLE IF EXISTS shopping_history;
