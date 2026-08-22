@@ -423,3 +423,46 @@ func TestContract_HouseholdCategories_Create(t *testing.T) {
 		t.Errorf("expected name 'Dairy', got %v", resp["name"])
 	}
 }
+
+func TestContract_OpenAPI_IdempotencyKeyDocumented(t *testing.T) {
+	protected := []string{
+		"/api/v1/households",
+		"/api/v1/households/{id}/members",
+		"/api/v1/households/{id}/lists",
+		"/api/v1/lists/{id}/items",
+		"/api/v1/households/{hid}/categories",
+		"/api/v1/history/{id}/re-add",
+	}
+	for _, p := range protected {
+		pathItem, _ := openAPISpec["paths"].(map[string]interface{})[p].(map[string]interface{})
+		if pathItem == nil {
+			t.Fatalf("OpenAPI spec missing path %s", p)
+		}
+		op, _ := pathItem["post"].(map[string]interface{})
+		if op == nil {
+			t.Fatalf("OpenAPI spec missing POST %s", p)
+		}
+		params, _ := op["parameters"].([]interface{})
+		found := false
+		for _, raw := range params {
+			param, _ := raw.(map[string]interface{})
+			if ref, _ := param["$ref"].(string); ref == "#/components/parameters/IdempotencyKeyHeader" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("POST %s missing IdempotencyKeyHeader parameter reference", p)
+		}
+	}
+
+	comps, _ := openAPISpec["components"].(map[string]interface{})
+	parameters, _ := comps["parameters"].(map[string]interface{})
+	hdr, _ := parameters["IdempotencyKeyHeader"].(map[string]interface{})
+	if hdr == nil {
+		t.Fatal("OpenAPI spec missing components.parameters.IdempotencyKeyHeader")
+	}
+	if name, _ := hdr["name"].(string); name != "Idempotency-Key" {
+		t.Errorf("header parameter name = %q, want Idempotency-Key", name)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/history"
+	"github.com/AliFnieer/needly-backend/internal/idempotency"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/AliFnieer/needly-backend/internal/notification"
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, ca
 	// All shopping item routes require authentication + household membership
 	itemRoutes := router.Group("")
 	itemRoutes.Use(middleware.AuthMiddleware(cfg))
+	itemRoutes.Use(idempotency.Middleware(db))
 	{
 		itemRoutes.POST("/lists/:id/items",
 			middleware.RequireMembership(db, middleware.HouseholdFromList(db)),

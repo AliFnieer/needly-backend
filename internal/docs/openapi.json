@@ -508,7 +508,13 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
+          }
+        ],
+        "description": "Supports the `Idempotency-Key` header for safe retries from offline clients."
       }
     },
     "/api/v1/households/{id}": {
@@ -698,6 +704,9 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
           }
         ],
         "requestBody": {
@@ -741,7 +750,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Supports the `Idempotency-Key` header for safe retries from offline clients."
       }
     },
     "/api/v1/households/{id}/members/{userId}": {
@@ -868,6 +878,9 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
           }
         ],
         "requestBody": {
@@ -911,7 +924,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Supports the `Idempotency-Key` header for safe retries from offline clients."
       }
     },
     "/api/v1/lists/{id}": {
@@ -1148,6 +1162,9 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
           }
         ],
         "requestBody": {
@@ -1191,7 +1208,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Supports the `Idempotency-Key` header for safe retries from offline clients."
       }
     },
     "/api/v1/items/{id}": {
@@ -1502,6 +1520,9 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
           }
         ],
         "requestBody": {
@@ -1545,7 +1566,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Supports the `Idempotency-Key` header for safe retries from offline clients."
       }
     },
     "/api/v1/households/{hid}/categories/{id}": {
@@ -2013,6 +2035,9 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
           }
         ],
         "responses": {
@@ -2046,7 +2071,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Supports the `Idempotency-Key` header for safe retries from offline clients."
       }
     },
     "/api/v1/households/{id}/notifications": {
@@ -2984,6 +3010,19 @@
         "required": [
           "message"
         ]
+      }
+    },
+    "parameters": {
+      "IdempotencyKeyHeader": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Unique key (e.g. a UUID) generated per queued mutation. Retrying the same POST with the same key returns the original response instead of executing again. Responses with status >= 500 are not stored; records expire after 24 hours.",
+        "schema": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "example": "0d5c2b6a-1f4e-4a67-9d3e-8f0a2b7c9d10"
       }
     }
   }

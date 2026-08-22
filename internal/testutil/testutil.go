@@ -9,6 +9,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/household"
+	"github.com/AliFnieer/needly-backend/internal/idempotency"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
 	"gorm.io/driver/sqlite"
@@ -66,6 +67,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&history.ShoppingHistory{},
 		&shoppinglist.ShoppingList{},
 		&shoppingitem.ShoppingItem{},
+		&idempotency.IdempotencyKey{},
 	)
 	if err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)

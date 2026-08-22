@@ -13,6 +13,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/database"
+	"github.com/AliFnieer/needly-backend/internal/idempotency"
 	"github.com/AliFnieer/needly-backend/internal/mailer"
 	"github.com/AliFnieer/needly-backend/internal/observability"
 	"github.com/AliFnieer/needly-backend/internal/server"
@@ -68,6 +69,11 @@ func main() {
 		for range ticker.C {
 			if _, err := authSvc.CleanupExpiredRefreshTokens(); err != nil {
 				slog.Warn("failed to cleanup expired refresh tokens", "error", err)
+			}
+			if n, err := idempotency.CleanupOlderThan(db, time.Now().Add(-idempotency.Retention)); err != nil {
+				slog.Warn("failed to cleanup stale idempotency keys", "error", err)
+			} else if n > 0 {
+				slog.Info("cleaned up stale idempotency keys", "count", n)
 			}
 		}
 	}()

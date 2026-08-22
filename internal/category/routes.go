@@ -3,6 +3,7 @@ package category
 import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/idempotency"
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -16,6 +17,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, ca
 	// Categories are scoped to a household and require membership
 	categoryGroup := router.Group("/households/:id/categories")
 	categoryGroup.Use(middleware.AuthMiddleware(cfg))
+	categoryGroup.Use(idempotency.Middleware(db))
 	categoryGroup.Use(middleware.RequireMembership(db, middleware.HouseholdFromParam("id")))
 	{
 		categoryGroup.GET("", controller.List)

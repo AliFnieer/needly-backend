@@ -473,6 +473,66 @@ GET    /docs                                     # Swagger UI
 GET    /docs/openapi.json                        # OpenAPI 3.0.3 spec
 ```
 
+## 📱 Building the Mobile Client
+
+Guidance for consuming this API from a mobile app.
+
+### Tokens & sessions
+
+- Store the refresh token in Keychain (iOS) / Keystore (Android) — never in
+  plain storage. Access tokens live only in memory.
+- Refresh tokens **rotate**: every `POST /auth/refresh` returns a new pair and
+  revokes the old token. Persisting the new refresh token immediately after
+  each refresh is mandatory.
+- Reuse of a revoked refresh token is treated as theft and revokes the entire
+  session family, forcing a fresh login. Never run two refresh calls at once —
+  use a single-flight wrapper and queue concurrent requests behind it.
+- On `401`: attempt one refresh; if that fails too, log out.
+
+### Rate limits
+
+- Auth endpoints (`register`, `login`, `forgot-password`, …): **10 req/min per IP**.
+- Everything else: **100 req/min per user** by default. Do not auto-retry
+  aggressively on failures; back off on `429`.
+
+### Offline-first sync
+
+- Initial load and background refresh: `GET /api/v1/households/:id/sync?since=<last server_time>`.
+  Items missing from the response were deleted — apply that as deletion.
+- Send `base_updated_at` from your local copy when updating items. A stale
+  copy yields **409 Conflict**: refetch, resolve locally, retry with fresh data.
+- Queue mutations while offline and replay them after reconnect.
+
+### Idempotent retries
+
+Queued POSTs can succeed server-side yet time out client-side; replaying them
+naively duplicates data. For every queued create, generate one UUID and send it as:
+
+```text
+Idempotency-Key: <uuid>
+```
+
+Supported on all protected POST endpoints (households, members, lists, items,
+categories, history re-add). Retrying with the same key returns the original
+response plus an `Idempotency-Replayed: true` header instead of executing
+again. Keys are stored per user for 24 hours; responses with status >= 500 are
+never stored, so failed requests remain retryable.
+
+### Real-time
+
+- The WebSocket is a "something changed" signal, not authoritative state:
+  reconnect with exponential backoff, then pull `/sync` again to catch up on
+  anything missed while disconnected.
+
+### Misc
+
+- All errors share the shape `{"error": "<message>"}`; `409` specifically means
+  "stale write".
+- Email links are built as `{APP_BASE_URL}/verify-email?token=…` and
+  `{APP_BASE_URL}/reset-password?token=…`. Decide whether they open web or
+  deep-link into the app, and set `APP_BASE_URL` per environment accordingly.
+- Generate API models from `/docs/openapi.json` rather than hand-writing them.
+
 ---
 
 ## 🧪 Testing

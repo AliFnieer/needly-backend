@@ -823,3 +823,51 @@ func TestAuth_ResendVerification_AlreadyVerified(t *testing.T) {
 		t.Errorf("expected 401 without token, got %d", w.Code)
 	}
 }
+
+func TestIdempotency_ItemCreateReplay(t *testing.T) {
+	s := setupServer(t)
+	token, _, listID := setupHouseholdAndList(t, s, "idem-replay@test.com")
+
+	itemBody := map[string]interface{}{"name": "Milk", "quantity": 2}
+	headers := authHeaders(token)
+	headers["Idempotency-Key"] = "offline-queue-abc-123"
+
+	// First attempt succeeds and executes.
+	first := s.doRequest("POST", fmt.Sprintf("/api/v1/lists/%s/items", listID), itemBody, headers)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first create failed: %d %s", first.Code, first.Body.String())
+	}
+
+	// Retry with the same key must replay the stored response, not duplicate.
+	retry := s.doRequest("POST", fmt.Sprintf("/api/v1/lists/%s/items", listID), itemBody, headers)
+	if retry.Code != http.StatusCreated {
+		t.Fatalf("replayed create failed: %d %s", retry.Code, retry.Body.String())
+	}
+	if first.Body.String() != retry.Body.String() {
+		t.Fatalf("replayed body differs:\nfirst:  %s\nretry:  %s", first.Body.String(), retry.Body.String())
+	}
+	if retry.Header().Get("Idempotency-Replayed") != "true" {
+		t.Error("expected Idempotency-Replayed header on replay")
+	}
+
+	w := s.doRequest("GET", fmt.Sprintf("/api/v1/lists/%s/items", listID), nil, authHeaders(token))
+	items := parseJSONArray(t, w)
+	if len(items) != 1 {
+		t.Fatalf("expected exactly 1 item after replayed create, got %d", len(items))
+	}
+}
+
+func TestShoppingItem_CreateWithoutKeyDuplicates(t *testing.T) {
+	s := setupServer(t)
+	token, _, listID := setupHouseholdAndList(t, s, "idem-nokey@test.com")
+
+	body := map[string]interface{}{"name": "Eggs"}
+	s.doRequest("POST", fmt.Sprintf("/api/v1/lists/%s/items", listID), body, authHeaders(token))
+	s.doRequest("POST", fmt.Sprintf("/api/v1/lists/%s/items", listID), body, authHeaders(token))
+
+	w := s.doRequest("GET", fmt.Sprintf("/api/v1/lists/%s/items", listID), nil, authHeaders(token))
+	items := parseJSONArray(t, w)
+	if len(items) != 2 {
+		t.Fatalf("without a key each request should execute; expected 2 items, got %d", len(items))
+	}
+}
