@@ -140,6 +140,8 @@ func RunMigrations(db *gorm.DB, migrationsDir string) error {
 		}
 
 		filePath := filepath.Join(migrationsDir, version)
+		// #nosec G304 -- version comes from os.ReadDir of the migrations
+		// directory, never from user input; the .sql extension is validated above.
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to read migration %s: %w", version, err)

@@ -55,9 +55,12 @@ jobs:
           cache: true
 
       - name: Run Gosec security scanner
-        uses: securego/gosec@master
+        uses: securego/gosec@v2.28.0
         with:
-          args: -exclude-generated ./...
+          # G104 (unhandled errors) is governed by errcheck in the lint job;
+          # gosec's duplicate reporting flags intentional best-effort calls
+          # (websocket close frames, gzip writer flush, test cleanup).
+          args: -exclude-generated -exclude=G104 ./...
 
       - name: Gosec summary
         if: always()
@@ -81,7 +84,9 @@ jobs:
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # Pinned to match the local toolchain; "latest" floats across major
+          # versions and breaks the install step.
+          version: v1.64.8
           args: --timeout=5m
 
       - name: Run go vet
