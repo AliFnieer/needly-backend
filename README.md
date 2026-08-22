@@ -291,6 +291,13 @@ RATE_LIMIT_WINDOW_SECONDS=60
 NOTIFICATIONS_ENABLED=true
 NOTIFICATIONS_WEBSOCKET_ENABLED=true
 NOTIFICATIONS_HISTORY_LIMIT=50
+
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=needly@localhost
+APP_BASE_URL=http://localhost:3000
 ```
 
 > Never commit real secrets to the repository.
@@ -345,12 +352,21 @@ All endpoints except auth endpoints require a valid JWT in the `Authorization: B
 ### Authentication
 
 ```text
-POST /api/v1/auth/register          # Create account (returns access + refresh tokens)
-POST /api/v1/auth/login             # Log in (returns access + refresh tokens)
-POST /api/v1/auth/refresh           # Exchange refresh token for new token pair
-GET  /api/v1/auth/me                # Get current user profile
-POST /api/v1/auth/logout            # Revoke refresh token(s)
+POST /api/v1/auth/register               # Create account (returns access + refresh tokens, sends verification email)
+POST /api/v1/auth/login                  # Log in (returns access + refresh tokens)
+POST /api/v1/auth/refresh                # Exchange refresh token for new token pair
+GET  /api/v1/auth/me                     # Get current user profile (includes email_verified)
+POST /api/v1/auth/logout                 # Revoke refresh token(s)
+POST /api/v1/auth/forgot-password        # Request a password reset email (no account enumeration)
+POST /api/v1/auth/reset-password         # Consume reset token, set new password, revoke all sessions
+GET  /api/v1/auth/verify-email?token=    # Confirm email address via token from verification email
+POST /api/v1/auth/resend-verification    # Resend the verification email (auth required)
 ```
+
+Password reset tokens expire after 15 minutes and are single-use; completing a
+reset revokes every active session. Email verification tokens expire after 24
+hours and are single-use. Emails are delivered over SMTP when `SMTP_HOST` is
+configured; otherwise they are logged to stdout for local development.
 
 ### Households
 

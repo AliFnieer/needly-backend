@@ -3,21 +3,32 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/AliFnieer/needly-backend/internal/config"
+	"github.com/AliFnieer/needly-backend/internal/mailer"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
+const (
+	// passwordResetTokenTTL is how long a password reset token remains valid.
+	passwordResetTokenTTL = 15 * time.Minute
+
+	// emailVerificationTokenTTL is how long an email verification token remains valid.
+	emailVerificationTokenTTL = 24 * time.Hour
+)
+
 // Service handles auth business logic.
 type Service struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db     *gorm.DB
+	cfg    *config.Config
+	mailer mailer.Mailer
 }
 
 // RegisterRequest is the payload for user registration.
@@ -44,6 +55,17 @@ type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// ForgotPasswordRequest is the payload for requesting a password reset.
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// ResetPasswordRequest is the payload for completing a password reset.
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8,max=72"`
+}
+
 // AuthResponse is returned on successful registration/login.
 type AuthResponse struct {
 	AccessToken  string `json:"access_token"`
@@ -53,11 +75,16 @@ type AuthResponse struct {
 	User         User   `json:"user"`
 }
 
-// NewService creates a new auth service.
-func NewService(db *gorm.DB, cfg *config.Config) *Service {
+// NewService creates a new auth service. A nil mailer falls back to the
+// development log mailer.
+func NewService(db *gorm.DB, cfg *config.Config, m mailer.Mailer) *Service {
+	if m == nil {
+		m = mailer.LogMailer{}
+	}
 	return &Service{
-		db:  db,
-		cfg: cfg,
+		db:     db,
+		cfg:    cfg,
+		mailer: m,
 	}
 }
 
@@ -94,6 +121,10 @@ func (s *Service) Register(req *RegisterRequest) (*AuthResponse, error) {
 		}
 		return nil, apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to create user")
 	}
+
+	// Send the verification email on a best-effort basis — registration must
+	// not fail when mail delivery is unavailable.
+	s.sendVerificationEmail(&user)
 
 	// Issue token pair
 	return s.issueTokenPair(&user)
@@ -182,6 +213,214 @@ func (s *Service) CleanupExpiredRefreshTokens() (int64, error) {
 		return 0, fmt.Errorf("failed to cleanup expired refresh tokens: %w", result.Error)
 	}
 	return result.RowsAffected, nil
+}
+
+// RequestPasswordReset issues a single-use password reset token for the
+// given email and delivers it via the mailer. The response is intentionally
+// identical whether or not the email is registered, to prevent enumeration.
+func (s *Service) RequestPasswordReset(req *ForgotPasswordRequest) error {
+	normalizedEmail := normalizeEmail(req.Email)
+
+	var user User
+	if err := s.db.Where("email = ?", normalizedEmail).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.Debug("password reset requested for unknown email", "email", normalizedEmail)
+			return nil
+		}
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to find user")
+	}
+
+	return s.sendPasswordResetEmail(&user)
+}
+
+// ResetPassword consumes a password reset token, updates the user's password,
+// and revokes all active sessions (refresh tokens) so other devices must log
+// in again with the new credentials.
+func (s *Service) ResetPassword(req *ResetPasswordRequest) error {
+	tokenHash := hashToken(req.Token)
+
+	var token PasswordResetToken
+	if err := s.db.Where("token_hash = ?", tokenHash).First(&token).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperr.BadRequest("invalid or expired reset token")
+		}
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to look up reset token")
+	}
+
+	if time.Now().After(token.ExpiresAt) || token.UsedAt != nil {
+		return apperr.BadRequest("invalid or expired reset token")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Atomically consume the token: only one request wins the race.
+	now := time.Now()
+	result := s.db.Model(&PasswordResetToken{}).
+		Where("id = ? AND used_at IS NULL", token.ID).
+		Update("used_at", now)
+	if result.Error != nil {
+		return apperr.Wrap(result.Error, http.StatusInternalServerError, apperr.CodeInternal, "failed to consume reset token")
+	}
+	if result.RowsAffected == 0 {
+		return apperr.BadRequest("invalid or expired reset token")
+	}
+
+	if err := s.db.Model(&User{}).Where("id = ?", token.UserID).
+		Update("password_hash", string(hashedPassword)).Error; err != nil {
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to update password")
+	}
+
+	// Force re-authentication on every device.
+	if err := s.revokeAllForUser(token.UserID); err != nil {
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to revoke sessions")
+	}
+	return nil
+}
+
+// VerifyEmail marks a user's email as verified using a verification token.
+func (s *Service) VerifyEmail(token string) error {
+	if strings.TrimSpace(token) == "" {
+		return apperr.BadRequest("verification token is required")
+	}
+	tokenHash := hashToken(token)
+
+	var stored EmailVerificationToken
+	if err := s.db.Where("token_hash = ?", tokenHash).First(&stored).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperr.BadRequest("invalid or expired verification token")
+		}
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to look up verification token")
+	}
+
+	if time.Now().After(stored.ExpiresAt) || stored.UsedAt != nil {
+		return apperr.BadRequest("invalid or expired verification token")
+	}
+
+	now := time.Now()
+	result := s.db.Model(&EmailVerificationToken{}).
+		Where("id = ? AND used_at IS NULL", stored.ID).
+		Update("used_at", now)
+	if result.Error != nil {
+		return apperr.Wrap(result.Error, http.StatusInternalServerError, apperr.CodeInternal, "failed to consume verification token")
+	}
+	if result.RowsAffected == 0 {
+		return apperr.BadRequest("invalid or expired verification token")
+	}
+
+	if err := s.db.Model(&User{}).Where("id = ? AND email_verified_at IS NULL", stored.UserID).
+		Update("email_verified_at", now).Error; err != nil {
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to verify email")
+	}
+	return nil
+}
+
+// ResendVerificationEmail issues a fresh verification token and emails it to
+// the authenticated user.
+func (s *Service) ResendVerificationEmail(userID uint) error {
+	var user User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperr.NotFound("user not found")
+		}
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to find user")
+	}
+	if user.EmailVerifiedAt != nil {
+		return apperr.BadRequest("email already verified")
+	}
+	s.sendVerificationEmail(&user)
+	return nil
+}
+
+// sendVerificationEmail stores a fresh single-use token and emails the link.
+func (s *Service) sendVerificationEmail(user *User) {
+	rawToken, err := s.createEmailVerificationToken(user.ID)
+	if err != nil {
+		slog.Error("failed to store verification token", "user_id", user.ID, "error", err)
+		return
+	}
+
+	link := fmt.Sprintf("%s/verify-email?token=%s", strings.TrimRight(s.cfg.App.BaseURL, "/"), rawToken)
+	body := strings.Join([]string{
+		"Hi " + user.FirstName + ",",
+		"",
+		"Welcome to Needly! Please confirm your email address:",
+		link,
+		"",
+		"This link expires in 24 hours.",
+	}, "\n")
+
+	if err := s.mailer.Send(user.Email, "Verify your Needly account", body); err != nil {
+		slog.Error("failed to send verification email", "user_id", user.ID, "error", err)
+	}
+}
+
+// createEmailVerificationToken persists a fresh single-use verification token
+// and returns its raw form.
+func (s *Service) createEmailVerificationToken(userID uint) (string, error) {
+	raw, err := generateRandomHex(32)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+	token := EmailVerificationToken{
+		UserID:    userID,
+		TokenHash: hashToken(raw),
+		ExpiresAt: time.Now().Add(emailVerificationTokenTTL),
+	}
+	if err := s.db.Create(&token).Error; err != nil {
+		return "", fmt.Errorf("failed to store verification token: %w", err)
+	}
+	return raw, nil
+}
+
+// sendPasswordResetEmail stores a fresh single-use token and emails the link.
+func (s *Service) sendPasswordResetEmail(user *User) error {
+	// A new reset request invalidates any previous unconsumed tokens.
+	if err := s.db.Where("user_id = ? AND used_at IS NULL", user.ID).
+		Delete(&PasswordResetToken{}).Error; err != nil {
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to clear old reset tokens")
+	}
+
+	rawToken, err := s.createPasswordResetToken(user.ID)
+	if err != nil {
+		return apperr.Wrap(err, http.StatusInternalServerError, apperr.CodeInternal, "failed to create reset token")
+	}
+
+	link := fmt.Sprintf("%s/reset-password?token=%s", strings.TrimRight(s.cfg.App.BaseURL, "/"), rawToken)
+	body := strings.Join([]string{
+		"Hi " + user.FirstName + ",",
+		"",
+		"We received a request to reset your Needly password:",
+		link,
+		"",
+		"This link expires in 15 minutes and can be used once.",
+		"If you did not request this, you can safely ignore this email.",
+	}, "\n")
+
+	if err := s.mailer.Send(user.Email, "Reset your Needly password", body); err != nil {
+		slog.Error("failed to send password reset email", "user_id", user.ID, "error", err)
+	}
+	return nil
+}
+
+// createPasswordResetToken persists a fresh single-use reset token and
+// returns its raw form.
+func (s *Service) createPasswordResetToken(userID uint) (string, error) {
+	raw, err := generateRandomHex(32)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+	token := PasswordResetToken{
+		UserID:    userID,
+		TokenHash: hashToken(raw),
+		ExpiresAt: time.Now().Add(passwordResetTokenTTL),
+	}
+	if err := s.db.Create(&token).Error; err != nil {
+		return "", fmt.Errorf("failed to store reset token: %w", err)
+	}
+	return raw, nil
 }
 
 // isUniqueViolation reports whether the error is a PostgreSQL unique

@@ -64,7 +64,9 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": ["Observability"],
+        "tags": [
+          "Observability"
+        ],
         "summary": "Health check",
         "description": "Returns the health status of the API.",
         "operationId": "healthCheck",
@@ -90,7 +92,9 @@
     },
     "/metrics": {
       "get": {
-        "tags": ["Observability"],
+        "tags": [
+          "Observability"
+        ],
         "summary": "Prometheus metrics",
         "description": "Exposes application metrics in Prometheus text format. Requires authentication in production mode.",
         "operationId": "getMetrics",
@@ -115,7 +119,9 @@
     },
     "/debug/traces": {
       "get": {
-        "tags": ["Observability"],
+        "tags": [
+          "Observability"
+        ],
         "summary": "Tracing summary",
         "description": "Returns a summary of collected trace spans. Requires authentication in production mode.",
         "operationId": "getTraces",
@@ -154,7 +160,9 @@
     },
     "/api/v1/auth/register": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Register a new user",
         "description": "Rate limited: 10 requests per minute per IP.",
         "operationId": "registerUser",
@@ -204,7 +212,9 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Log in a user",
         "description": "Rate limited: 10 requests per minute per IP.",
         "operationId": "loginUser",
@@ -254,7 +264,9 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Refresh access token",
         "description": "Rate limited: 10 requests per minute per IP.",
         "operationId": "refreshToken",
@@ -319,7 +331,9 @@
     },
     "/api/v1/auth/logout": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Log out a user",
         "description": "Revokes refresh tokens. If a refresh_token is provided in the body, only that token is revoked. Otherwise all tokens for the user are revoked.",
         "operationId": "logoutUser",
@@ -370,7 +384,9 @@
     },
     "/api/v1/auth/me": {
       "get": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Get current user",
         "operationId": "getCurrentUser",
         "security": [
@@ -404,7 +420,9 @@
     },
     "/api/v1/households": {
       "get": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "List user's households",
         "operationId": "listHouseholds",
         "security": [
@@ -439,7 +457,9 @@
         }
       },
       "post": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "Create a household",
         "operationId": "createHousehold",
         "security": [
@@ -493,7 +513,9 @@
     },
     "/api/v1/households/{id}": {
       "get": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "Get household by ID",
         "operationId": "getHousehold",
         "security": [
@@ -545,7 +567,9 @@
         }
       },
       "put": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "Update a household",
         "operationId": "updateHousehold",
         "security": [
@@ -607,7 +631,9 @@
         }
       },
       "delete": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "Delete a household",
         "operationId": "deleteHousehold",
         "security": [
@@ -654,7 +680,9 @@
     },
     "/api/v1/households/{id}/members": {
       "post": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "Add member to household",
         "operationId": "addHouseholdMember",
         "security": [
@@ -718,7 +746,9 @@
     },
     "/api/v1/households/{id}/members/{userId}": {
       "delete": {
-        "tags": ["Households"],
+        "tags": [
+          "Households"
+        ],
         "summary": "Remove member from household",
         "operationId": "removeHouseholdMember",
         "security": [
@@ -773,7 +803,9 @@
     },
     "/api/v1/households/{id}/lists": {
       "get": {
-        "tags": ["Shopping Lists"],
+        "tags": [
+          "Shopping Lists"
+        ],
         "summary": "List shopping lists for a household",
         "operationId": "listHouseholdLists",
         "security": [
@@ -818,7 +850,9 @@
         }
       },
       "post": {
-        "tags": ["Shopping Lists"],
+        "tags": [
+          "Shopping Lists"
+        ],
         "summary": "Create a shopping list",
         "operationId": "createShoppingList",
         "security": [
@@ -882,7 +916,9 @@
     },
     "/api/v1/lists/{id}": {
       "get": {
-        "tags": ["Shopping Lists"],
+        "tags": [
+          "Shopping Lists"
+        ],
         "summary": "Get shopping list by ID",
         "operationId": "getShoppingList",
         "security": [
@@ -934,7 +970,9 @@
         }
       },
       "put": {
-        "tags": ["Shopping Lists"],
+        "tags": [
+          "Shopping Lists"
+        ],
         "summary": "Update a shopping list",
         "operationId": "updateShoppingList",
         "security": [
@@ -996,7 +1034,9 @@
         }
       },
       "delete": {
-        "tags": ["Shopping Lists"],
+        "tags": [
+          "Shopping Lists"
+        ],
         "summary": "Delete a shopping list",
         "operationId": "deleteShoppingList",
         "security": [
@@ -1043,7 +1083,9 @@
     },
     "/api/v1/lists/{id}/items": {
       "get": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "List items in a shopping list",
         "operationId": "listShoppingItems",
         "security": [
@@ -1088,7 +1130,9 @@
         }
       },
       "post": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "Add an item to a shopping list",
         "operationId": "createShoppingItem",
         "security": [
@@ -1152,7 +1196,9 @@
     },
     "/api/v1/items/{id}": {
       "get": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "Get shopping item by ID",
         "operationId": "getShoppingItem",
         "security": [
@@ -1204,7 +1250,9 @@
         }
       },
       "put": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "Update a shopping item",
         "operationId": "updateShoppingItem",
         "security": [
@@ -1266,7 +1314,9 @@
         }
       },
       "delete": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "Delete a shopping item",
         "operationId": "deleteShoppingItem",
         "security": [
@@ -1313,7 +1363,9 @@
     },
     "/api/v1/items/{id}/completed": {
       "patch": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "Set shopping item completion status",
         "operationId": "setShoppingItemCompleted",
         "security": [
@@ -1337,7 +1389,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["is_completed"],
+                "required": [
+                  "is_completed"
+                ],
                 "properties": {
                   "is_completed": {
                     "type": "boolean"
@@ -1383,7 +1437,9 @@
     },
     "/api/v1/households/{hid}/categories": {
       "get": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "List categories for a household",
         "operationId": "listHouseholdCategories",
         "security": [
@@ -1428,7 +1484,9 @@
         }
       },
       "post": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "Create a category in a household",
         "operationId": "createHouseholdCategory",
         "security": [
@@ -1492,7 +1550,9 @@
     },
     "/api/v1/households/{hid}/categories/{id}": {
       "get": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "Get category by ID",
         "operationId": "getCategory",
         "security": [
@@ -1552,7 +1612,9 @@
         }
       },
       "put": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "Update a category",
         "operationId": "updateCategory",
         "security": [
@@ -1622,7 +1684,9 @@
         }
       },
       "delete": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "Delete a category",
         "operationId": "deleteCategory",
         "security": [
@@ -1677,7 +1741,9 @@
     },
     "/api/v1/lists/{id}/history": {
       "get": {
-        "tags": ["History"],
+        "tags": [
+          "History"
+        ],
         "summary": "List shopping history for a list",
         "operationId": "listListHistory",
         "security": [
@@ -1724,7 +1790,9 @@
     },
     "/api/v1/households/{id}/history": {
       "get": {
-        "tags": ["History"],
+        "tags": [
+          "History"
+        ],
         "summary": "List shopping history for a household",
         "operationId": "listHouseholdHistory",
         "security": [
@@ -1771,7 +1839,9 @@
     },
     "/api/v1/households/{id}/sync": {
       "get": {
-        "tags": ["Real-Time"],
+        "tags": [
+          "Real-Time"
+        ],
         "summary": "Sync snapshot for offline clients",
         "description": "Returns every list and item in the household so clients can reconcile local state after being offline. Pass the previously returned server_time as the since parameter to receive only entities changed after that moment. Entities present locally but absent from the response were deleted remotely.",
         "operationId": "syncHousehold",
@@ -1822,7 +1892,9 @@
     },
     "/api/v1/history/{id}": {
       "get": {
-        "tags": ["History"],
+        "tags": [
+          "History"
+        ],
         "summary": "Get history entry by ID",
         "operationId": "getHistoryEntry",
         "security": [
@@ -1874,7 +1946,9 @@
         }
       },
       "delete": {
-        "tags": ["History"],
+        "tags": [
+          "History"
+        ],
         "summary": "Delete a history entry",
         "operationId": "deleteHistoryEntry",
         "security": [
@@ -1921,7 +1995,9 @@
     },
     "/api/v1/history/{id}/re-add": {
       "post": {
-        "tags": ["Shopping Items"],
+        "tags": [
+          "Shopping Items"
+        ],
         "summary": "Re-add an item from history",
         "operationId": "reAddItemFromHistory",
         "security": [
@@ -1975,7 +2051,9 @@
     },
     "/api/v1/households/{id}/notifications": {
       "get": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "List recent notifications for a household",
         "operationId": "listHouseholdNotifications",
         "security": [
@@ -2022,7 +2100,9 @@
     },
     "/api/v1/ws/{household_id}": {
       "get": {
-        "tags": ["Real-Time"],
+        "tags": [
+          "Real-Time"
+        ],
         "summary": "WebSocket connection for a household",
         "description": "Establishes a WebSocket connection scoped to a specific household.",
         "operationId": "websocketConnectHousehold",
@@ -2070,7 +2150,9 @@
     },
     "/docs": {
       "get": {
-        "tags": ["Docs"],
+        "tags": [
+          "Docs"
+        ],
         "summary": "Swagger UI",
         "description": "Serves the interactive Swagger UI for exploring the API.",
         "operationId": "swaggerUI",
@@ -2090,7 +2172,9 @@
     },
     "/docs/openapi.json": {
       "get": {
-        "tags": ["Docs"],
+        "tags": [
+          "Docs"
+        ],
         "summary": "OpenAPI specification",
         "description": "Returns the OpenAPI 3.0 specification for this API in JSON format.",
         "operationId": "getOpenAPISpec",
@@ -2101,6 +2185,179 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Request a password reset email",
+        "description": "Always responds identically whether or not the email is registered, to prevent account enumeration. Rate limited: 10 requests per minute per IP.",
+        "operationId": "forgotPassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired token / invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Reset the password using a token from the reset email",
+        "description": "Consumes the single-use token, updates the password, and revokes all active sessions.",
+        "operationId": "resetPassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired token / invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify an email address",
+        "description": "Follows the link from the verification email. Consumes the single-use token and marks the account verified.",
+        "operationId": "verifyEmail",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired token / invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/resend-verification": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Resend the email verification link",
+        "description": "Requires authentication. Fails with 400 if the account is already verified.",
+        "operationId": "resendVerification",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification email sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired token / invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2129,7 +2386,12 @@
       },
       "RegisterRequest": {
         "type": "object",
-        "required": ["first_name", "last_name", "email", "password"],
+        "required": [
+          "first_name",
+          "last_name",
+          "email",
+          "password"
+        ],
         "properties": {
           "first_name": {
             "type": "string",
@@ -2155,7 +2417,10 @@
       },
       "LoginRequest": {
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -2169,7 +2434,9 @@
       },
       "RefreshTokenRequest": {
         "type": "object",
-        "required": ["refresh_token"],
+        "required": [
+          "refresh_token"
+        ],
         "properties": {
           "refresh_token": {
             "type": "string"
@@ -2223,6 +2490,10 @@
             "type": "string",
             "format": "email"
           },
+          "email_verified": {
+            "type": "boolean",
+            "description": "Whether the user has confirmed their email address."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -2275,7 +2546,10 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "member"]
+            "enum": [
+              "owner",
+              "member"
+            ]
           },
           "created_at": {
             "type": "string",
@@ -2289,7 +2563,9 @@
       },
       "CreateHouseholdRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2300,7 +2576,9 @@
       },
       "UpdateHouseholdRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2311,14 +2589,19 @@
       },
       "AddMemberRequest": {
         "type": "object",
-        "required": ["user_id"],
+        "required": [
+          "user_id"
+        ],
         "properties": {
           "user_id": {
             "type": "integer"
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "member"]
+            "enum": [
+              "owner",
+              "member"
+            ]
           }
         }
       },
@@ -2355,7 +2638,9 @@
       },
       "CreateListRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2366,7 +2651,9 @@
       },
       "UpdateListRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2406,7 +2693,13 @@
           },
           "recurrence_rule": {
             "type": "string",
-            "enum": ["", "daily", "weekly", "biweekly", "monthly"]
+            "enum": [
+              "",
+              "daily",
+              "weekly",
+              "biweekly",
+              "monthly"
+            ]
           },
           "next_due_at": {
             "type": "string",
@@ -2431,7 +2724,9 @@
       },
       "CreateItemRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2455,7 +2750,12 @@
           },
           "recurrence_rule": {
             "type": "string",
-            "enum": ["daily", "weekly", "biweekly", "monthly"]
+            "enum": [
+              "daily",
+              "weekly",
+              "biweekly",
+              "monthly"
+            ]
           }
         }
       },
@@ -2485,7 +2785,13 @@
           "recurrence_rule": {
             "type": "string",
             "nullable": true,
-            "enum": ["", "daily", "weekly", "biweekly", "monthly"]
+            "enum": [
+              "",
+              "daily",
+              "weekly",
+              "biweekly",
+              "monthly"
+            ]
           },
           "base_updated_at": {
             "type": "string",
@@ -2545,7 +2851,9 @@
       },
       "CreateCategoryRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2634,6 +2942,48 @@
             "format": "date-time"
           }
         }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Password reset token from the email link."
+          },
+          "new_password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 72
+          }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
       }
     }
   }

@@ -153,3 +153,85 @@ func (c *Controller) Me(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, user)
 }
+
+// ForgotPassword handles POST /api/v1/auth/forgot-password
+func (c *Controller) ForgotPassword(ctx *gin.Context) {
+	var req ForgotPasswordRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := c.service.RequestPasswordReset(&req); err != nil {
+		appErr := apperr.FromError(err)
+		slog.Error("password reset request failed", "error", err)
+		ctx.JSON(appErr.Status, gin.H{"error": appErr.Message})
+		return
+	}
+
+	// Deliberately identical for known and unknown emails (no enumeration).
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "If that email is registered, a password reset link has been sent.",
+	})
+}
+
+// ResetPassword handles POST /api/v1/auth/reset-password
+func (c *Controller) ResetPassword(ctx *gin.Context) {
+	var req ResetPasswordRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := c.service.ResetPassword(&req); err != nil {
+		appErr := apperr.FromError(err)
+		slog.Error("password reset failed", "error", err)
+		ctx.JSON(appErr.Status, gin.H{"error": appErr.Message})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Password updated. Please log in again on all devices.",
+	})
+}
+
+// VerifyEmail handles GET /api/v1/auth/verify-email?token=...
+func (c *Controller) VerifyEmail(ctx *gin.Context) {
+	token := ctx.Query("token")
+
+	if err := c.service.VerifyEmail(token); err != nil {
+		appErr := apperr.FromError(err)
+		slog.Error("email verification failed", "error", err)
+		ctx.JSON(appErr.Status, gin.H{"error": appErr.Message})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Email verified successfully.",
+	})
+}
+
+// ResendVerification handles POST /api/v1/auth/resend-verification
+func (c *Controller) ResendVerification(ctx *gin.Context) {
+	userID, ok := getCurrentUserID(ctx)
+	if !ok {
+		return
+	}
+
+	if err := c.service.ResendVerificationEmail(userID); err != nil {
+		appErr := apperr.FromError(err)
+		slog.Error("verification resend failed", "error", err)
+		ctx.JSON(appErr.Status, gin.H{"error": appErr.Message})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "If your email is not yet verified, a new verification link has been sent.",
+	})
+}

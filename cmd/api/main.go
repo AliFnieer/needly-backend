@@ -13,6 +13,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/config"
 	"github.com/AliFnieer/needly-backend/internal/database"
+	"github.com/AliFnieer/needly-backend/internal/mailer"
 	"github.com/AliFnieer/needly-backend/internal/observability"
 	"github.com/AliFnieer/needly-backend/internal/server"
 )
@@ -60,7 +61,7 @@ func main() {
 	}
 	defer redisClient.Close()
 
-	authSvc := auth.NewService(db, cfg)
+	authSvc := auth.NewService(db, cfg, mailer.New(cfg))
 	go func() {
 		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()

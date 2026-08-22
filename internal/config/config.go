@@ -19,11 +19,19 @@ type Config struct {
 	RateLimit    RateLimitConfig
 	Notification NotificationConfig
 	Tracing      TracingConfig
+	SMTP         MailerConfig
+	App          AppConfig
 }
 
 type ServerConfig struct {
 	Port    string
 	GinMode string
+}
+
+// AppConfig holds application-wide settings such as the public base URL used
+// to build links sent in transactional emails.
+type AppConfig struct {
+	BaseURL string
 }
 
 type DatabaseConfig struct {
@@ -70,6 +78,20 @@ type NotificationConfig struct {
 	WebSocketEnabled bool
 	HistoryLimit     int
 }
+
+// MailerConfig configures outbound SMTP for transactional emails. When Host
+// is empty the application falls back to a development mailer that logs
+// messages instead of delivering them.
+type MailerConfig struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	From     string
+}
+
+// Enabled reports whether SMTP delivery is configured.
+func (c MailerConfig) Enabled() bool { return c.Host != "" }
 
 // TracingConfig configures OpenTelemetry distributed tracing.
 type TracingConfig struct {
@@ -134,6 +156,16 @@ func Load() *Config {
 			OTLPEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 			ServiceName:  getEnv("OTEL_SERVICE_NAME", "needly-api"),
 			LogLevel:     getEnv("LOG_LEVEL", "info"),
+		},
+		SMTP: MailerConfig{
+			Host:     getEnv("SMTP_HOST", ""),
+			Port:     getEnv("SMTP_PORT", "587"),
+			Username: getEnv("SMTP_USERNAME", ""),
+			Password: getEnv("SMTP_PASSWORD", ""),
+			From:     getEnv("SMTP_FROM", "needly@localhost"),
+		},
+		App: AppConfig{
+			BaseURL: getEnv("APP_BASE_URL", "http://localhost:3000"),
 		},
 	}
 

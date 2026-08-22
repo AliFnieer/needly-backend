@@ -58,6 +58,8 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	err = db.AutoMigrate(
 		&auth.User{},
 		&auth.RefreshToken{},
+		&auth.PasswordResetToken{},
+		&auth.EmailVerificationToken{},
 		&household.Household{},
 		&household.HouseholdMember{},
 		&category.Category{},
@@ -82,7 +84,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 // SeedUser creates a test user and returns it.
 func SeedUser(t *testing.T, db *gorm.DB, email, password string) *auth.User {
 	t.Helper()
-	_, err := auth.NewService(db, TestConfig()).Register(&auth.RegisterRequest{
+	_, err := auth.NewService(db, TestConfig(), nil).Register(&auth.RegisterRequest{
 		FirstName: "Test",
 		LastName:  "User",
 		Email:     email,

@@ -2,12 +2,15 @@ package integration
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/category"
@@ -648,5 +651,175 @@ func TestFullLifecycle(t *testing.T) {
 	cats := parseJSONArray(t, w)
 	if len(cats) != 1 {
 		t.Fatalf("expected 1 category, got %d", len(cats))
+	}
+}
+
+// --- PASSWORD RESET / EMAIL VERIFICATION TESTS ---
+
+func insertSingleUseToken(t *testing.T, db *gorm.DB, table, userIDCol string, userID uint, raw string, ttl time.Duration) {
+	t.Helper()
+	h := sha256.Sum256([]byte(raw))
+	if err := db.Exec(
+		"INSERT INTO "+table+" (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+		userID, hex.EncodeToString(h[:]), time.Now().Add(ttl),
+	).Error; err != nil {
+		t.Fatalf("failed to insert token: %v", err)
+	}
+}
+
+func userIDByEmail(t *testing.T, db *gorm.DB, email string) uint {
+	t.Helper()
+	var id uint
+	if err := db.Raw("SELECT id FROM users WHERE email = ?", email).Scan(&id).Error; err != nil || id == 0 {
+		t.Fatalf("failed to find user %s: %v", email, err)
+	}
+	return id
+}
+
+func TestAuth_ForgotPassword_NoEnumeration(t *testing.T) {
+	s := setupServer(t)
+
+	w := s.doRequest("POST", "/api/v1/auth/forgot-password", map[string]string{
+		"email": "doesnotexist@test.com",
+	}, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for unknown email, got %d %s", w.Code, w.Body.String())
+	}
+
+	w2 := s.doRequest("POST", "/api/v1/auth/forgot-password", map[string]string{
+		"email": "also-unknown@test.com",
+	}, nil)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected identical response for second unknown email, got %d", w2.Code)
+	}
+	if w.Body.String() != w2.Body.String() {
+		t.Error("responses for known/unknown emails should be indistinguishable")
+	}
+}
+
+func TestAuth_PasswordReset_FullFlow(t *testing.T) {
+	s := setupServer(t)
+	email := "resetfull@test.com"
+
+	registerAndGetTokens(t, s, email)
+	userID := userIDByEmail(t, s.db, email)
+
+	insertSingleUseToken(t, s.db, "password_reset_tokens", "user_id", userID, "raw-reset-token", 15*time.Minute)
+
+	// Wrong token rejected.
+	w := s.doRequest("POST", "/api/v1/auth/reset-password", map[string]string{
+		"token":        "wrong-token",
+		"new_password": "newPassword456",
+	}, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for wrong token, got %d %s", w.Code, w.Body.String())
+	}
+
+	// Correct token accepted.
+	w = s.doRequest("POST", "/api/v1/auth/reset-password", map[string]string{
+		"token":        "raw-reset-token",
+		"new_password": "newPassword456",
+	}, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid reset, got %d %s", w.Code, w.Body.String())
+	}
+
+	// New password logs in; old one does not.
+	w = s.doRequest("POST", "/api/v1/auth/login", map[string]string{
+		"email": email, "password": "newPassword456",
+	}, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login with new password failed: %d %s", w.Code, w.Body.String())
+	}
+
+	w = s.doRequest("POST", "/api/v1/auth/login", map[string]string{
+		"email": email, "password": "securepass123",
+	}, nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("old password should be rejected, got %d", w.Code)
+	}
+
+	// Token is single-use.
+	insertSingleUseToken(t, s.db, "password_reset_tokens", "user_id", userID, "raw-second-token", 15*time.Minute)
+	s.doRequest("POST", "/api/v1/auth/reset-password", map[string]string{
+		"token":        "raw-second-token",
+		"new_password": "thirdPassword789",
+	}, nil)
+	w = s.doRequest("POST", "/api/v1/auth/reset-password", map[string]string{
+		"token":        "raw-second-token",
+		"new_password": "fourthPassword000",
+	}, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("reused token should be rejected with 400, got %d", w.Code)
+	}
+}
+
+func TestAuth_VerifyEmail_Flow(t *testing.T) {
+	s := setupServer(t)
+	email := "verifyflow@test.com"
+
+	accessToken, _ := registerAndGetTokens(t, s, email)
+
+	// Before verification the flag must be false.
+	w := s.doRequest("GET", "/api/v1/auth/me", nil, authHeaders(accessToken))
+	if w.Code != http.StatusOK {
+		t.Fatalf("me failed: %d %s", w.Code, w.Body.String())
+	}
+	me := parseJSON(t, w)
+	if verified, ok := me["email_verified"].(bool); !ok || verified {
+		t.Errorf("expected email_verified=false before verification, got %v", me["email_verified"])
+	}
+
+	// Bad token rejected.
+	w = s.doRequest("GET", "/api/v1/auth/verify-email?token=bogus", nil, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad verification token, got %d", w.Code)
+	}
+
+	// Valid token verifies.
+	insertSingleUseToken(t, s.db, "email_verification_tokens", "user_id", userIDByEmail(t, s.db, email), "raw-verify-token", 24*time.Hour)
+	w = s.doRequest("GET", "/api/v1/auth/verify-email?token=raw-verify-token", nil, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid verification, got %d %s", w.Code, w.Body.String())
+	}
+
+	// Flag flips to true and the token cannot be reused.
+	w = s.doRequest("GET", "/api/v1/auth/me", nil, authHeaders(accessToken))
+	me = parseJSON(t, w)
+	if verified, ok := me["email_verified"].(bool); !ok || !verified {
+		t.Errorf("expected email_verified=true after verification, got %v", me["email_verified"])
+	}
+
+	w = s.doRequest("GET", "/api/v1/auth/verify-email?token=raw-verify-token", nil, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("reused verification token should be rejected with 400, got %d", w.Code)
+	}
+}
+
+func TestAuth_ResendVerification_AlreadyVerified(t *testing.T) {
+	s := setupServer(t)
+	email := "resendflow@test.com"
+
+	accessToken, _ := registerAndGetTokens(t, s, email)
+
+	// Unverified user can resend.
+	w := s.doRequest("POST", "/api/v1/auth/resend-verification", nil, authHeaders(accessToken))
+	if w.Code != http.StatusOK {
+		t.Fatalf("resend failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// Verify the account, then resend must fail with 400.
+	insertSingleUseToken(t, s.db, "email_verification_tokens", "user_id", userIDByEmail(t, s.db, email), "raw-resend-verify", 24*time.Hour)
+	s.doRequest("GET", "/api/v1/auth/verify-email?token=raw-resend-verify", nil, nil)
+
+	w = s.doRequest("POST", "/api/v1/auth/resend-verification", nil, authHeaders(accessToken))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 resending after verification, got %d", w.Code)
+	}
+
+	// Endpoint requires authentication.
+	w = s.doRequest("POST", "/api/v1/auth/resend-verification", nil, nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", w.Code)
 	}
 }

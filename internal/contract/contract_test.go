@@ -210,6 +210,25 @@ func TestContract_OpenAPI_HasHouseholdEndpoints(t *testing.T) {
 	}
 }
 
+func TestContract_OpenAPI_HasPasswordResetAndVerificationEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		path, method string
+	}{
+		{"/api/v1/auth/forgot-password", "post"},
+		{"/api/v1/auth/reset-password", "post"},
+		{"/api/v1/auth/verify-email", "get"},
+		{"/api/v1/auth/resend-verification", "post"},
+	} {
+		if !specHasPath(tc.path) {
+			t.Errorf("OpenAPI spec missing %s path", tc.path)
+			continue
+		}
+		if !specOperationExists(tc.path, tc.method) {
+			t.Errorf("OpenAPI spec missing %s %s operation", tc.method, tc.path)
+		}
+	}
+}
+
 func TestContract_OpenAPI_StatusCodes(t *testing.T) {
 	tests := []struct {
 		path       string
@@ -222,6 +241,12 @@ func TestContract_OpenAPI_StatusCodes(t *testing.T) {
 		{"/api/v1/auth/register", "post", 409, "register duplicate"},
 		{"/api/v1/auth/login", "post", 200, "login success"},
 		{"/api/v1/auth/login", "post", 401, "login bad credentials"},
+		{"/api/v1/auth/forgot-password", "post", 200, "forgot password accepted"},
+		{"/api/v1/auth/forgot-password", "post", 400, "forgot password invalid body"},
+		{"/api/v1/auth/reset-password", "post", 200, "reset password success"},
+		{"/api/v1/auth/reset-password", "post", 400, "reset password bad token"},
+		{"/api/v1/auth/verify-email", "get", 200, "verify email success"},
+		{"/api/v1/auth/verify-email", "get", 400, "verify email bad token"},
 		{"/api/v1/households", "get", 200, "list households"},
 		{"/api/v1/households/{hid}/categories", "get", 200, "list categories"},
 		{"/api/v1/households/{hid}/categories", "post", 201, "create category"},
