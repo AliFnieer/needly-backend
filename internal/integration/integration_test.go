@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/AliFnieer/needly-backend/internal/auth"
@@ -16,6 +17,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/middleware"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
+	"github.com/AliFnieer/needly-backend/internal/sync"
 	"github.com/AliFnieer/needly-backend/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -47,6 +49,7 @@ func setupServer(t *testing.T) *testServer {
 	shoppingitem.RegisterRoutes(api, db, cfg, nil, nil)
 	category.RegisterRoutes(api, db, cfg, nil)
 	history.RegisterRoutes(api, db, cfg)
+	sync.RegisterRoutes(api, db, cfg)
 
 	return &testServer{engine: engine, db: db, cfg: cfg}
 }
@@ -507,6 +510,61 @@ func TestShoppingItem_CRUD(t *testing.T) {
 }
 
 // --- FULL LIFECYCLE TEST ---
+
+func TestHouseholdSyncEndpoint(t *testing.T) {
+	s := setupServer(t)
+	token, _ := registerAndGetTokens(t, s, "syncendpoint@test.com")
+
+	// Create household + list + item
+	w := s.doRequest("POST", "/api/v1/households", map[string]string{"name": "Sync Household"}, authHeaders(token))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create household: %d", w.Code)
+	}
+	hhID := fmt.Sprintf("%.0f", parseJSON(t, w)["id"].(float64))
+
+	w = s.doRequest("POST", fmt.Sprintf("/api/v1/households/%s/lists", hhID), map[string]string{"name": "Groceries"}, authHeaders(token))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create list: %d", w.Code)
+	}
+	listID := fmt.Sprintf("%.0f", parseJSON(t, w)["id"].(float64))
+
+	w = s.doRequest("POST", "/api/v1/lists/"+listID+"/items", map[string]interface{}{"name": "Milk"}, authHeaders(token))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create item: %d %s", w.Code, w.Body.String())
+	}
+
+	// Full snapshot
+	w = s.doRequest("GET", "/api/v1/households/"+hhID+"/sync", nil, authHeaders(token))
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync failed: %d %s", w.Code, w.Body.String())
+	}
+	snapshot := parseJSON(t, w)
+	serverTime, ok := snapshot["server_time"].(string)
+	if !ok || serverTime == "" {
+		t.Fatalf("missing server_time in sync snapshot")
+	}
+	lists := snapshot["lists"].([]interface{})
+	items := snapshot["items"].([]interface{})
+	if len(lists) != 1 || len(items) != 1 {
+		t.Fatalf("expected 1 list and 1 item, got %d and %d", len(lists), len(items))
+	}
+
+	// Delta since server_time must be empty
+	w = s.doRequest("GET", "/api/v1/households/"+hhID+"/sync?since="+url.QueryEscape(serverTime), nil, authHeaders(token))
+	if w.Code != http.StatusOK {
+		t.Fatalf("delta sync failed: %d %s", w.Code, w.Body.String())
+	}
+	delta := parseJSON(t, w)
+	if deltaItems := delta["items"].([]interface{}); len(deltaItems) != 0 {
+		t.Fatalf("expected empty delta items, got %d", len(deltaItems))
+	}
+
+	// Invalid since parameter
+	w = s.doRequest("GET", "/api/v1/households/"+hhID+"/sync?since=yesterday", nil, authHeaders(token))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid since, got: %d", w.Code)
+	}
+}
 
 func TestFullLifecycle(t *testing.T) {
 	s := setupServer(t)

@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"testing"
+	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/auth"
 	"github.com/AliFnieer/needly-backend/internal/category"
@@ -46,6 +47,8 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger:                 logger.Default.LogMode(logger.Silent),
 		SkipDefaultTransaction: true,
+		// Match production: write auto-timestamps in UTC.
+		NowFunc: func() time.Time { return time.Now().UTC() },
 	})
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)

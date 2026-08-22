@@ -19,6 +19,7 @@ import (
 	"github.com/AliFnieer/needly-backend/internal/observability"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/shoppinglist"
+	"github.com/AliFnieer/needly-backend/internal/sync"
 	"github.com/AliFnieer/needly-backend/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -208,6 +209,7 @@ func (s *Server) setupRoutes() {
 	household.RegisterRoutes(apiV1, s.db, s.cfg, s.notificationSvc, s.cache)
 	shoppinglist.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
 	shoppingitem.RegisterRoutes(apiV1, s.db, s.cfg, s.cache, s.notificationSvc)
+	sync.RegisterRoutes(apiV1, s.db, s.cfg)
 	notification.RegisterRoutes(apiV1, s.notificationSvc, s.cfg, s.db)
 	websocket.RegisterRoutes(apiV1, s.hub, s.db, s.cfg)
 }

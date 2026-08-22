@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/history"
@@ -52,12 +53,16 @@ type CreateRequest struct {
 
 // UpdateRequest is the payload for updating a shopping item.
 type UpdateRequest struct {
-	Name           string   `json:"name" binding:"omitempty,min=1,max=200"`
-	Quantity       *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
-	Unit           string   `json:"unit" binding:"omitempty,min=1,max=50"`
-	CategoryID     *uint    `json:"category_id" binding:"omitempty"`
-	IsCompleted    *bool    `json:"is_completed"`
+	Name        string   `json:"name" binding:"omitempty,min=1,max=200"`
+	Quantity    *float64 `json:"quantity" binding:"omitempty,min=0.001,max=1000000"`
+	Unit        string   `json:"unit" binding:"omitempty,min=1,max=50"`
+	CategoryID  *uint    `json:"category_id" binding:"omitempty"`
+	IsCompleted *bool    `json:"is_completed"`
 	RecurrenceRule *string  `json:"recurrence_rule" binding:"omitempty,oneof=daily weekly biweekly monthly"`
+	// BaseUpdatedAt enables optimistic concurrency for offline clients:
+	// when provided and it does not match the stored updated_at, the update
+	// is rejected with a conflict so the client can merge and retry.
+	BaseUpdatedAt *time.Time `json:"base_updated_at" binding:"omitempty"`
 }
 
 // NewService creates a new shopping item service.
@@ -242,6 +247,11 @@ func (s *Service) Update(ctx context.Context, id, userID uint, req *UpdateReques
 			return nil, errors.New("shopping item not found")
 		}
 		return nil, fmt.Errorf("failed to get shopping item: %w", err)
+	}
+
+	// Reject updates based on stale client state (offline conflict detection)
+	if req.BaseUpdatedAt != nil && !item.UpdatedAt.Equal(*req.BaseUpdatedAt) {
+		return nil, apperr.Conflict("item was modified by another member; refresh and retry")
 	}
 
 	if req.Name != "" {

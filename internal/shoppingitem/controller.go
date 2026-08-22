@@ -1,10 +1,12 @@
 package shoppingitem
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 
+	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/gin-gonic/gin"
 )
 
@@ -144,6 +146,13 @@ func (ctl *Controller) Update(c *gin.Context) {
 
 	item, err := ctl.service.Update(c.Request.Context(), id, userID, &req)
 	if err != nil {
+		var appErr *apperr.AppError
+		if errors.As(err, &appErr) {
+			c.JSON(appErr.Status, gin.H{
+				"error": appErr.Message,
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})

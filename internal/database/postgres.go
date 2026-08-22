@@ -40,6 +40,9 @@ func InitPostgres(cfg *config.Config) (*gorm.DB, error) {
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: gormLogger,
+		// Write auto-timestamps (created_at/updated_at) in UTC so stored
+		// representations stay consistent across environments.
+		NowFunc: func() time.Time { return time.Now().UTC() },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)

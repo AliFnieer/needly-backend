@@ -429,6 +429,7 @@ GET    /api/v1/households/:id/notifications      # Recent notifications for a ho
 
 ```text
 GET    /api/v1/ws/:household_id                  # WebSocket connection (requires auth + membership)
+GET    /api/v1/households/:id/sync               # Sync snapshot for offline clients (?since=RFC3339 cursor)
 ```
 
 Events are pushed to connected clients when shared data changes:
@@ -651,7 +652,7 @@ User B can see the change immediately without refreshing the application.
 
 * [x] Recurring items
 * [x] Push notifications
-* [ ] Offline synchronization
+* [x] Offline synchronization
 * [x] Redis Pub/Sub
 * [x] WebSocket horizontal scaling
 * [x] Rate limiting
@@ -661,7 +662,7 @@ User B can see the change immediately without refreshing the application.
 * [x] Production deployment
 * [x] CI/CD
 * [x] Security review
-* [ ] Performance testing
+* [x] Performance testing
 * [x] API documentation
 * [x] Observability and monitoring
 

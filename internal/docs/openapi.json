@@ -1769,6 +1769,57 @@
         }
       }
     },
+    "/api/v1/households/{id}/sync": {
+      "get": {
+        "tags": ["Real-Time"],
+        "summary": "Sync snapshot for offline clients",
+        "description": "Returns every list and item in the household so clients can reconcile local state after being offline. Pass the previously returned server_time as the since parameter to receive only entities changed after that moment. Entities present locally but absent from the response were deleted remotely.",
+        "operationId": "syncHousehold",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "RFC3339 timestamp cursor from a previous sync",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Household synchronization snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid since parameter"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/api/v1/history/{id}": {
       "get": {
         "tags": ["History"],
@@ -2435,6 +2486,37 @@
             "type": "string",
             "nullable": true,
             "enum": ["", "daily", "weekly", "biweekly", "monthly"]
+          },
+          "base_updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Optimistic concurrency for offline clients: echo the updated_at of your local copy. A mismatch returns 409 Conflict."
+          }
+        }
+      },
+      "SyncSnapshot": {
+        "type": "object",
+        "properties": {
+          "household_id": {
+            "type": "integer"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Use as the since cursor on the next sync"
+          },
+          "lists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingList"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingItem"
+            }
           }
         }
       },

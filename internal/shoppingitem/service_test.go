@@ -2,9 +2,12 @@ package shoppingitem_test
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
+	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
@@ -404,6 +407,57 @@ func TestUpdate_InvalidRecurrenceRule(t *testing.T) {
 	_, err = svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{RecurrenceRule: &bad})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid recurrence rule")
+}
+
+func TestUpdate_MatchingBaseUpdatedAtSucceeds(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "update_baseok@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Milk"})
+	require.NoError(t, err)
+
+	updated, err := svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{Name: "Whole Milk"})
+	require.NoError(t, err)
+
+	// Echoing the current updated_at back must succeed
+	updated2, err := svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{
+		Name:          "Fresh Milk",
+		BaseUpdatedAt: &updated.UpdatedAt,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Fresh Milk", updated2.Name)
+}
+
+func TestUpdate_StaleBaseUpdatedAtConflicts(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "update_stale@example.com", "password123")
+	listID := seedList(t, db, user.ID)
+
+	svc := shoppingitem.NewService(db, nil, nil, nil)
+	ctx := context.Background()
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Milk"})
+	require.NoError(t, err)
+
+	_, err = svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{Name: "Whole Milk"})
+	require.NoError(t, err)
+
+	// A client that was offline holds an older copy
+	staleBase := time.Now().Add(-time.Hour).UTC()
+	_, err = svc.Update(ctx, item.ID, user.ID, &shoppingitem.UpdateRequest{
+		Name:          "Offline Rename",
+		BaseUpdatedAt: &staleBase,
+	})
+	require.Error(t, err)
+
+	var appErr *apperr.AppError
+	require.True(t, errors.As(err, &appErr))
+	assert.Equal(t, http.StatusConflict, appErr.Status)
+	assert.Equal(t, apperr.CodeConflict, appErr.Code)
 }
 
 func TestUpdateCompleted_Recurring_SetsNextDueAt(t *testing.T) {
