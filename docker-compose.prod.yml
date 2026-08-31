@@ -4,10 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: needly-api
-<<<<<<< Updated upstream
     # Bind to localhost only — nginx on the host proxies 80/443 to this.
-=======
->>>>>>> Stashed changes
     ports:
       - "127.0.0.1:8080:8080"
     environment:
@@ -50,10 +47,7 @@ services:
     container_name: needly-postgres
     environment:
       POSTGRES_USER: postgres
-<<<<<<< Updated upstream
       # Single source of truth: the same DB_PASSWORD from .env that the API uses.
-=======
->>>>>>> Stashed changes
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: needly
     volumes:
