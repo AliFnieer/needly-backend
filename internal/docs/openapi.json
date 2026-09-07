@@ -96,7 +96,7 @@
           "Observability"
         ],
         "summary": "Prometheus metrics",
-        "description": "Exposes application metrics in Prometheus text format. Requires authentication in production mode.",
+        "description": "Exposes application metrics in Prometheus text format. Requires authentication.",
         "operationId": "getMetrics",
         "security": [
           {
@@ -110,47 +110,6 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/debug/traces": {
-      "get": {
-        "tags": [
-          "Observability"
-        ],
-        "summary": "Tracing summary",
-        "description": "Returns a summary of collected trace spans. Requires authentication in production mode.",
-        "operationId": "getTraces",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Tracing summary",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "spans_total": {
-                      "type": "integer",
-                      "example": 42
-                    },
-                    "spans_errors": {
-                      "type": "integer",
-                      "example": 3
-                    },
-                    "avg_duration_ms": {
-                      "type": "number",
-                      "example": 12.5
-                    }
-                  }
                 }
               }
             }
@@ -286,22 +245,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "access_token": {
-                      "type": "string"
-                    },
-                    "refresh_token": {
-                      "type": "string"
-                    },
-                    "token_type": {
-                      "type": "string",
-                      "example": "bearer"
-                    },
-                    "expires_in": {
-                      "type": "integer"
-                    }
-                  }
+                  "$ref": "#/components/schemas/AuthResponse"
                 }
               }
             }
@@ -1328,6 +1272,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Stale write: base_updated_at does not match the item's current updated_at (concurrent modification)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -1781,6 +1735,27 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of entries returned (default 50, max 200). A limit of 0 falls back to the default.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Number of entries to skip for paging (default 0).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -1829,6 +1804,27 @@
             "required": true,
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of entries returned (default 50, max 200). A limit of 0 falls back to the default.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Number of entries to skip for paging (default 0).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         ],
@@ -2196,6 +2192,28 @@
         }
       }
     },
+    "/docs/redoc": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Redoc UI",
+        "description": "Serves the interactive Redoc documentation UI.",
+        "operationId": "redocUI",
+        "responses": {
+          "200": {
+            "description": "Redoc UI HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/docs/openapi.json": {
       "get": {
         "tags": [
@@ -2489,7 +2507,7 @@
           },
           "token_type": {
             "type": "string",
-            "example": "bearer"
+            "example": "Bearer"
           },
           "expires_in": {
             "type": "integer",
@@ -2939,9 +2957,6 @@
       "Notification": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
           "type": {
             "type": "string"
           },
