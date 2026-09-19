@@ -80,6 +80,10 @@ func (s *Service) Create(ownerID uint, req *CreateRequest) (*Household, error) {
 		return nil, fmt.Errorf("failed to create household: %w", err)
 	}
 
+	// Invalidate the owner's household list cache so the new household shows
+	// up immediately instead of after the list TTL expires.
+	s.invalidateHouseholdCache(household.ID)
+
 	// Notify the household members about the new household
 	s.notify(context.Background(), notification.NotificationTypeHouseholdCreated,
 		"Household created",

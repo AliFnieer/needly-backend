@@ -32,6 +32,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, rl
 	protected.Use(middleware.AuthMiddleware(cfg))
 	{
 		protected.GET("/auth/me", controller.Me)
+		protected.GET("/users/:id", controller.LookupUser)
 		protected.POST("/auth/logout", controller.Logout)
 		protected.POST("/auth/resend-verification", controller.ResendVerification)
 	}

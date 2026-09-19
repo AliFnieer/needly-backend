@@ -3,6 +3,7 @@ package auth
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/AliFnieer/needly-backend/internal/apperr"
 	"github.com/gin-gonic/gin"
@@ -152,6 +153,31 @@ func (c *Controller) Me(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, user)
+}
+
+// LookupUser handles GET /api/v1/users/:id
+func (c *Controller) LookupUser(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid user id parameter",
+		})
+		return
+	}
+
+	user, err := c.service.GetByID(id)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"id":         user.ID,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+	})
 }
 
 // ForgotPassword handles POST /api/v1/auth/forgot-password
