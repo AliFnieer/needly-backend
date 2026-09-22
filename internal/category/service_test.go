@@ -104,14 +104,96 @@ func TestCategory_List(t *testing.T) {
 	if len(cats) != 3 {
 		t.Fatalf("expected 3 categories, got %d", len(cats))
 	}
-	if cats[0].Name != "Apples" {
-		t.Errorf("expected first category Apples, got %s", cats[0].Name)
+	if cats[0].Name != "Beverages" {
+		t.Errorf("expected first category Beverages, got %s", cats[0].Name)
 	}
-	if cats[1].Name != "Beverages" {
-		t.Errorf("expected second category Beverages, got %s", cats[1].Name)
+	if cats[1].Name != "Snacks" {
+		t.Errorf("expected second category Snacks, got %s", cats[1].Name)
 	}
-	if cats[2].Name != "Snacks" {
-		t.Errorf("expected third category Snacks, got %s", cats[2].Name)
+	if cats[2].Name != "Apples" {
+		t.Errorf("expected third category Apples, got %s", cats[2].Name)
+	}
+}
+
+func TestCategory_Reorder(t *testing.T) {
+	svc := newTestService(t)
+
+	cat1, _ := svc.Create(1, &category.CreateRequest{Name: "First"})
+	cat2, _ := svc.Create(1, &category.CreateRequest{Name: "Second"})
+	cat3, _ := svc.Create(1, &category.CreateRequest{Name: "Third"})
+
+	err := svc.Reorder(1, []uint{cat3.ID, cat1.ID, cat2.ID})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	cats, err := svc.List(1)
+	if err != nil {
+		t.Fatalf("list failed: %v", err)
+	}
+	if len(cats) != 3 {
+		t.Fatalf("expected 3 categories, got %d", len(cats))
+	}
+	got := []string{cats[0].Name, cats[1].Name, cats[2].Name}
+	want := []string{"Third", "First", "Second"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d: expected %s, got %s", i, want[i], got[i])
+		}
+	}
+}
+
+func TestCategory_Reorder_RequiresCompleteSet(t *testing.T) {
+	svc := newTestService(t)
+
+	cat1, _ := svc.Create(1, &category.CreateRequest{Name: "Alpha"})
+	_, _ = svc.Create(1, &category.CreateRequest{Name: "Beta"})
+
+	err := svc.Reorder(1, []uint{cat1.ID})
+	if err == nil {
+		t.Fatal("expected error when omitting a category")
+	}
+	if err.Error() != "category_ids must contain every category in the household exactly once" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCategory_Reorder_Duplicate(t *testing.T) {
+	svc := newTestService(t)
+
+	cat, _ := svc.Create(1, &category.CreateRequest{Name: "Solo"})
+
+	err := svc.Reorder(1, []uint{cat.ID, cat.ID})
+	if err == nil {
+		t.Fatal("expected error for duplicate ids")
+	}
+	if err.Error() != "duplicate category ids in category_ids" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCategory_Reorder_WrongHouseholdCategory(t *testing.T) {
+	svc := newTestService(t)
+
+	other, _ := svc.Create(1, &category.CreateRequest{Name: "House1"})
+	ownA, _ := svc.Create(2, &category.CreateRequest{Name: "House2-A"})
+	ownB, _ := svc.Create(2, &category.CreateRequest{Name: "House2-B"})
+
+	err := svc.Reorder(2, []uint{ownB.ID, other.ID})
+	if err == nil {
+		t.Fatal("expected error when reordering another household's category")
+	}
+	if err.Error() != "category not found in household" {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// The failed reorder must not have mutated the existing order.
+	cats, listErr := svc.List(2)
+	if listErr != nil {
+		t.Fatalf("list failed: %v", listErr)
+	}
+	if len(cats) != 2 || cats[0].ID != ownA.ID || cats[1].ID != ownB.ID {
+		t.Errorf("household 2 order mutated after failed reorder: %+v", cats)
 	}
 }
 
