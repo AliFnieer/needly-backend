@@ -10,7 +10,7 @@ import (
 // RegisterRoutes registers authenticated websocket endpoints under the given router group.
 func RegisterRoutes(rg *gin.RouterGroup, hub *Hub, db *gorm.DB, cfg *config.Config) {
 	ws := rg.Group("/ws")
-	ws.Use(middleware.AuthMiddleware(cfg))
+	ws.Use(middleware.AuthMiddlewareWS(cfg))
 	{
 		// WebSocket connection for a specific household (requires membership)
 		ws.GET("/:household_id", func(c *gin.Context) {
