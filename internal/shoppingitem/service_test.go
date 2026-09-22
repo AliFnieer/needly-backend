@@ -3,15 +3,19 @@ package shoppingitem_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/AliFnieer/needly-backend/internal/apperr"
+	"github.com/AliFnieer/needly-backend/internal/cache"
 	"github.com/AliFnieer/needly-backend/internal/category"
 	"github.com/AliFnieer/needly-backend/internal/history"
 	"github.com/AliFnieer/needly-backend/internal/shoppingitem"
 	"github.com/AliFnieer/needly-backend/internal/testutil"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -645,4 +649,80 @@ func TestListByListID_RolloverPersistsToDB(t *testing.T) {
 	require.NoError(t, db.First(&stored, item.ID).Error)
 	assert.False(t, stored.IsCompleted)
 	assert.Nil(t, stored.NextDueAt)
+}
+
+// redisCache connects to Redis for cache invalidation tests, skipping when
+// Redis is unavailable (mirrors the convention in internal/cache).
+func redisCache(t *testing.T) *cache.Cache {
+	t.Helper()
+	host := os.Getenv("REDIS_HOST")
+	if host == "" {
+		t.Skip("REDIS_HOST not set, skipping cache integration tests")
+	}
+	port := os.Getenv("REDIS_PORT")
+	if port == "" {
+		port = "6379"
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", host, port),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       1,
+	})
+	t.Cleanup(func() { _ = client.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		t.Skipf("redis not reachable: %v", err)
+	}
+	return cache.NewCache(client, time.Minute)
+}
+
+// TestItemMutations_EvictEmbeddedListCaches guards against stale reads of
+// GET /lists/:id and GET /households/:id/lists after item mutations: those
+// endpoints serve cached snapshots that embed items, so item writes must evict
+// the shoppinglist and household-lists cache keys too.
+func TestItemMutations_EvictEmbeddedListCaches(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	user := testutil.SeedUser(t, db, "evict_cache@example.com", "password123")
+	c := redisCache(t)
+	ctx := context.Background()
+
+	svc := shoppingitem.NewService(db, c, nil, nil)
+	listID := seedList(t, db, user.ID)
+
+	keys := []string{
+		fmt.Sprintf("shoppinglist:%d", listID),
+		"household:1:lists",
+	}
+
+	assertEvictedAfter := func(mutate func()) {
+		for _, key := range keys {
+			require.NoError(t, c.Set(ctx, key, []byte("stale")))
+		}
+		mutate()
+		for _, key := range keys {
+			var out []byte
+			hit, err := c.Get(ctx, key, &out)
+			require.NoError(t, err)
+			assert.Falsef(t, hit, "expected cache key %q to be evicted", key)
+		}
+	}
+
+	assertEvictedAfter(func() {
+		_, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Milk"})
+		require.NoError(t, err)
+	})
+
+	item, err := svc.Create(ctx, listID, user.ID, &shoppingitem.CreateRequest{Name: "Bread"})
+	require.NoError(t, err)
+
+	assertEvictedAfter(func() {
+		_, err := svc.UpdateCompleted(ctx, item.ID, user.ID, true)
+		require.NoError(t, err)
+	})
+
+	assertEvictedAfter(func() {
+		require.NoError(t, svc.Delete(ctx, item.ID))
+	})
 }

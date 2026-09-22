@@ -31,6 +31,14 @@ const (
 	listItemsCacheKeyPrefix = "list:"
 	// listItemsCacheKeySuffix is the suffix for list items cache keys.
 	listItemsCacheKeySuffix = ":items"
+	// shoppingListCacheKeyPrefix mirrors the shoppinglist package single-list cache key.
+	// That cache embeds items, so item mutations must evict it or GET /lists/:id
+	// keeps serving stale embedded items.
+	shoppingListCacheKeyPrefix = "shoppinglist:"
+	// householdListsCacheKeyPrefix and householdListsCacheKeySuffix mirror the
+	// shoppinglist package household lists cache key, which also embeds items.
+	householdListsCacheKeyPrefix = "household:"
+	householdListsCacheKeySuffix = ":lists"
 )
 
 // Service handles shopping item business logic.
@@ -521,16 +529,27 @@ func listItemsCacheKey(listID uint) string {
 	return fmt.Sprintf("%s%d%s", listItemsCacheKeyPrefix, listID, listItemsCacheKeySuffix)
 }
 
-// invalidateItem removes cached data for a specific item and its list.
-func (s *Service) invalidateItem(itemID, listID uint) {
+// listCacheKey builds the cache key for a single shopping list.
+func listCacheKey(listID uint) string {
+	return fmt.Sprintf("%s%d", shoppingListCacheKeyPrefix, listID)
+}
+
+// householdListsCacheKey builds the cache key for a household's lists.
+func householdListsCacheKey(householdID uint) string {
+	return fmt.Sprintf("%s%d%s", householdListsCacheKeyPrefix, householdID, householdListsCacheKeySuffix)
+}
+
+// invalidateListCaches removes every cache entry derived from a list's items,
+// including the single-list and household-lists entries that embed items.
+func (s *Service) invalidateListCaches(ctx context.Context, listID uint) {
 	if s.cache == nil {
 		return
 	}
 
-	ctx := context.Background()
 	keys := []string{
-		itemCacheKey(itemID),
 		listItemsCacheKey(listID),
+		listCacheKey(listID),
+		householdListsCacheKey(s.householdIDForList(listID)),
 	}
 
 	for _, key := range keys {
@@ -540,15 +559,20 @@ func (s *Service) invalidateItem(itemID, listID uint) {
 	}
 }
 
-// invalidateListItems removes cached data for a list's items.
-func (s *Service) invalidateListItems(listID uint) {
+// invalidateItem removes cached data for a specific item and its list.
+func (s *Service) invalidateItem(itemID, listID uint) {
 	if s.cache == nil {
 		return
 	}
 
 	ctx := context.Background()
-	key := listItemsCacheKey(listID)
-	if err := s.cache.Delete(ctx, key); err != nil {
-		slog.Error("cache delete error", "key", key, "error", err)
+	if err := s.cache.Delete(ctx, itemCacheKey(itemID)); err != nil {
+		slog.Error("cache delete error", "key", itemCacheKey(itemID), "error", err)
 	}
+	s.invalidateListCaches(ctx, listID)
+}
+
+// invalidateListItems removes cached data for a list's items.
+func (s *Service) invalidateListItems(listID uint) {
+	s.invalidateListCaches(context.Background(), listID)
 }

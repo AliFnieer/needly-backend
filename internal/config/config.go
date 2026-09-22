@@ -140,7 +140,7 @@ func Load() *Config {
 			Issuer:               getEnv("JWT_ISSUER", "needly-api"),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
+			AllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8081")),
 		},
 		RateLimit: RateLimitConfig{
 			Enabled:       getEnvAsBool("RATE_LIMIT_ENABLED", true),
