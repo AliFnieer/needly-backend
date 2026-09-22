@@ -178,7 +178,7 @@ func (s *Service) Create(ctx context.Context, listID, userID uint, req *CreateRe
 	s.notify(ctx, notification.NotificationTypeItemCreated,
 		"New shopping item",
 		fmt.Sprintf("Item %q was added to the list", item.Name),
-		householdID, listID, item.ID, userID)
+		householdID, listID, item.ID, userID, notification.NameContext{ItemName: item.Name, ListName: s.listNameForList(listID)})
 
 	return &item, nil
 }
@@ -332,7 +332,7 @@ func (s *Service) Update(ctx context.Context, id, userID uint, req *UpdateReques
 	s.notify(ctx, notification.NotificationTypeItemUpdated,
 		"Shopping item updated",
 		fmt.Sprintf("Item %q was updated", item.Name),
-		householdID, item.ListID, item.ID, userID)
+		householdID, item.ListID, item.ID, userID, notification.NameContext{ItemName: item.Name, ListName: s.listNameForList(item.ListID)})
 
 	return &item, nil
 }
@@ -384,7 +384,7 @@ func (s *Service) UpdateCompleted(ctx context.Context, id, userID uint, isComple
 	s.notify(ctx, nt,
 		title,
 		fmt.Sprintf("Item %q was %s", item.Name, map[bool]string{true: "completed", false: "re-opened"}[isCompleted]),
-		householdID, item.ListID, item.ID, userID)
+		householdID, item.ListID, item.ID, userID, notification.NameContext{ItemName: item.Name, ListName: s.listNameForList(item.ListID)})
 
 	return &item, nil
 }
@@ -415,7 +415,7 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 	s.notify(ctx, notification.NotificationTypeItemDeleted,
 		"Shopping item deleted",
 		fmt.Sprintf("Item %q was deleted", item.Name),
-		householdID, item.ListID, item.ID, 0)
+		householdID, item.ListID, item.ID, 0, notification.NameContext{ItemName: item.Name, ListName: s.listNameForList(item.ListID)})
 
 	return nil
 }
@@ -451,7 +451,7 @@ func (s *Service) ReAddFromHistory(ctx context.Context, historyID, userID uint) 
 	s.notify(ctx, notification.NotificationTypeItemReAdded,
 		"Shopping item re-added",
 		fmt.Sprintf("Item %q was re-added to the list", item.Name),
-		householdID, item.ListID, item.ID, userID)
+		householdID, item.ListID, item.ID, userID, notification.NameContext{ItemName: item.Name, ListName: s.listNameForList(item.ListID)})
 
 	return &item, nil
 }
@@ -475,6 +475,7 @@ func (s *Service) rollOverDueItems(ctx context.Context, listID uint) {
 	}
 
 	householdID := s.householdIDForList(listID)
+	listName := s.listNameForList(listID)
 
 	rolled := 0
 	for i := range due {
@@ -492,7 +493,7 @@ func (s *Service) rollOverDueItems(ctx context.Context, listID uint) {
 		s.notify(ctx, notification.NotificationTypeItemRecurred,
 			"Recurring item due again",
 			fmt.Sprintf("Item %q is back on the list", due[i].Name),
-			householdID, listID, due[i].ID, due[i].CreatedBy)
+			householdID, listID, due[i].ID, due[i].CreatedBy, notification.NameContext{ItemName: due[i].Name, ListName: listName})
 	}
 
 	if rolled > 0 {
@@ -501,14 +502,29 @@ func (s *Service) rollOverDueItems(ctx context.Context, listID uint) {
 }
 
 // notify delivers a notification to all household members.
-func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint) {
+func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint, names notification.NameContext) {
 	if s.notification == nil {
 		return
 	}
 
-	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
+	n := notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)
+	n.WithNames(names)
+
+	if err := s.notification.NotifyHousehold(ctx, n); err != nil {
 		slog.Error("shopping item notification error", "error", err)
 	}
+}
+
+// listNameForList resolves the name of a shopping list.
+func (s *Service) listNameForList(listID uint) string {
+	var list struct {
+		Name string
+	}
+	if err := s.db.Table("shopping_lists").Select("name").Where("id = ?", listID).Scan(&list).Error; err != nil {
+		slog.Error("failed to resolve name for list", "list_id", listID, "error", err)
+		return ""
+	}
+	return list.Name
 }
 
 // householdIDForList resolves the household ID for a given shopping list.
