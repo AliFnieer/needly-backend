@@ -40,14 +40,33 @@ const (
 
 // Notification is a push notification broadcast to household members.
 type Notification struct {
-	Type        NotificationType `json:"type"`
-	Title       string           `json:"title"`
-	Body        string           `json:"body"`
-	HouseholdID uint             `json:"household_id"`
-	ListID      uint             `json:"list_id,omitempty"`
-	ItemID      uint             `json:"item_id,omitempty"`
-	ActorID     uint             `json:"actor_id,omitempty"`
-	CreatedAt   time.Time        `json:"created_at"`
+	Type          NotificationType `json:"type"`
+	Title         string           `json:"title"`
+	Body          string           `json:"body"`
+	HouseholdID   uint             `json:"household_id"`
+	ListID        uint             `json:"list_id,omitempty"`
+	ItemID        uint             `json:"item_id,omitempty"`
+	ActorID       uint             `json:"actor_id,omitempty"`
+	ItemName      string           `json:"item_name,omitempty"`
+	ListName      string           `json:"list_name,omitempty"`
+	HouseholdName string           `json:"household_name,omitempty"`
+	CreatedAt     time.Time        `json:"created_at"`
+}
+
+// NameContext carries human-readable names attached to a notification so
+// clients can localize the text instead of relying on server-side strings.
+type NameContext struct {
+	ItemName      string
+	ListName      string
+	HouseholdName string
+}
+
+// WithNames attaches the human-readable names to a notification.
+func (n *Notification) WithNames(names NameContext) *Notification {
+	n.ItemName = names.ItemName
+	n.ListName = names.ListName
+	n.HouseholdName = names.HouseholdName
+	return n
 }
 
 // BuildNotification creates a notification payload.

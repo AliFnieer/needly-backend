@@ -65,7 +65,7 @@ func (s *Service) Create(ctx context.Context, householdID, userID uint, req *Cre
 	s.notify(ctx, notification.NotificationTypeListCreated,
 		"New shopping list",
 		fmt.Sprintf("Shopping list %q was created", list.Name),
-		householdID, list.ID, 0, userID)
+		householdID, list.ID, 0, userID, notification.NameContext{ListName: list.Name})
 
 	return &list, nil
 }
@@ -157,7 +157,7 @@ func (s *Service) Update(ctx context.Context, id uint, req *UpdateRequest) (*Sho
 	s.notify(ctx, notification.NotificationTypeListUpdated,
 		"Shopping list updated",
 		fmt.Sprintf("Shopping list %q was updated", list.Name),
-		list.HouseholdID, list.ID, 0, 0)
+		list.HouseholdID, list.ID, 0, 0, notification.NameContext{ListName: list.Name})
 
 	return &list, nil
 }
@@ -192,21 +192,24 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 	s.invalidateList(list.ID, list.HouseholdID)
 
 	// Notify household members about the deleted list
-	s.notify(ctx, notification.NotificationTypeListDeleted,
-		"Shopping list deleted",
-		fmt.Sprintf("Shopping list %q was deleted", list.Name),
-		list.HouseholdID, list.ID, 0, 0)
+s.notify(ctx, notification.NotificationTypeListDeleted,
+			"Shopping list deleted",
+			fmt.Sprintf("Shopping list %q was deleted", list.Name),
+			list.HouseholdID, list.ID, 0, 0, notification.NameContext{ListName: list.Name})
 
 	return nil
 }
 
 // notify delivers a notification to all household members.
-func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint) {
+func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint, names notification.NameContext) {
 	if s.notification == nil {
 		return
 	}
 
-	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
+	n := notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)
+	n.WithNames(names)
+
+	if err := s.notification.NotifyHousehold(ctx, n); err != nil {
 		slog.Error("shopping list notification error", "error", err)
 	}
 }
