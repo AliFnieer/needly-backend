@@ -66,7 +66,11 @@ type UpdateRequest struct {
 	Unit           string   `json:"unit" binding:"omitempty,min=1,max=50"`
 	CategoryID     *uint    `json:"category_id" binding:"omitempty"`
 	IsCompleted    *bool    `json:"is_completed"`
-	RecurrenceRule *string  `json:"recurrence_rule" binding:"omitempty,oneof=daily weekly biweekly monthly"`
+	// RecurrenceRule is nil when unchanged, a non-empty supported value to set,
+	// or "" to clear recurrence. Validation (allowing "") is done in
+	// validateRecurrenceRule because gin's oneof binding rejects the empty
+	// string.
+	RecurrenceRule *string  `json:"recurrence_rule"`
 	// BaseUpdatedAt enables optimistic concurrency for offline clients:
 	// when provided and it does not match the stored updated_at, the update
 	// is rejected with a conflict so the client can merge and retry.
