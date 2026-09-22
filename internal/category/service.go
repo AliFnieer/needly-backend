@@ -29,6 +29,13 @@ type UpdateRequest struct {
 	Name string `json:"name" binding:"omitempty,min=1,max=100"`
 }
 
+// ReorderRequest is the payload for reordering a household's categories.
+// CategoryIDs must contain every category in the household exactly once, in
+// the desired display order (following sort_order ascending).
+type ReorderRequest struct {
+	CategoryIDs []uint `json:"category_ids" binding:"required,min=1"`
+}
+
 // NewService creates a new category service.
 func NewService(db *gorm.DB, cacheClient *cache.Cache) *Service {
 	return &Service{
@@ -39,9 +46,16 @@ func NewService(db *gorm.DB, cacheClient *cache.Cache) *Service {
 
 // Create adds a new category within a household.
 func (s *Service) Create(householdID uint, req *CreateRequest) (*Category, error) {
+	var maxOrder uint
+	s.db.Model(&Category{}).
+		Where("household_id = ?", householdID).
+		Select("COALESCE(MAX(sort_order), 0)").
+		Scan(&maxOrder)
+
 	category := Category{
 		HouseholdID: householdID,
 		Name:        req.Name,
+		SortOrder:   maxOrder + 1,
 	}
 
 	if err := s.db.Create(&category).Error; err != nil {
@@ -91,7 +105,7 @@ func (s *Service) List(householdID uint) ([]Category, error) {
 	}
 
 	var categories []Category
-	if err := s.db.Where("household_id = ?", householdID).Order("name ASC").Find(&categories).Error; err != nil {
+	if err := s.db.Where("household_id = ?", householdID).Order("sort_order ASC, id ASC").Find(&categories).Error; err != nil {
 		return nil, fmt.Errorf("failed to list categories: %w", err)
 	}
 
@@ -143,6 +157,45 @@ func (s *Service) Delete(id, householdID uint) error {
 
 	s.invalidateCache(householdID)
 
+	return nil
+}
+
+// Reorder persists a new display order for a household's categories.
+func (s *Service) Reorder(householdID uint, ids []uint) error {
+	seen := make(map[uint]struct{}, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; dup {
+			return errors.New("duplicate category ids in category_ids")
+		}
+		seen[id] = struct{}{}
+	}
+
+	var total int64
+	if err := s.db.Model(&Category{}).Where("household_id = ?", householdID).Count(&total).Error; err != nil {
+		return fmt.Errorf("failed to count categories: %w", err)
+	}
+	if len(ids) != int(total) {
+		return errors.New("category_ids must contain every category in the household exactly once")
+	}
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		for i, id := range ids {
+			res := tx.Model(&Category{}).Where("id = ? AND household_id = ?", id, householdID).
+				Update("sort_order", i+1)
+			if res.Error != nil {
+				return fmt.Errorf("failed to reorder categories: %w", res.Error)
+			}
+			if res.RowsAffected == 0 {
+				return errors.New("category not found in household")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	s.invalidateCache(householdID)
 	return nil
 }
 

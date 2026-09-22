@@ -1781,6 +1781,65 @@
         }
       }
     },
+    "/api/v1/households/{hid}/categories/order": {
+      "put": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Reorder household categories",
+        "operationId": "reorderCategories",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "hid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderCategoriesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Categories reordered"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/lists/{id}/history": {
       "get": {
         "tags": [
@@ -2972,6 +3031,10 @@
             "type": "string",
             "maxLength": 100
           },
+          "sort_order": {
+            "type": "integer",
+            "description": "Display order within the household (ascending)."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -3002,6 +3065,22 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100
+          }
+        }
+      },
+      "ReorderCategoriesRequest": {
+        "type": "object",
+        "required": [
+          "category_ids"
+        ],
+        "properties": {
+          "category_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer"
+            },
+            "description": "Every category id in the household, in the desired display order."
           }
         }
       },
