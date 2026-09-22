@@ -22,6 +22,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config, ca
 	{
 		categoryGroup.GET("", controller.List)
 		categoryGroup.POST("", controller.Create)
+		categoryGroup.PUT("/order", controller.Reorder)
 		categoryGroup.GET("/:categoryId", controller.GetByID)
 		categoryGroup.PUT("/:categoryId", controller.Update)
 		categoryGroup.DELETE("/:categoryId", controller.Delete)

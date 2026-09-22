@@ -59,6 +59,27 @@ func (ctl *Controller) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, category)
 }
 
+// Reorder handles PUT /api/v1/households/:id/categories/order
+func (ctl *Controller) Reorder(c *gin.Context) {
+	householdID, ok := extractHouseholdID(c)
+	if !ok {
+		return
+	}
+
+	var req ReorderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := ctl.service.Reorder(householdID, req.CategoryIDs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}
+
 // GetByID handles GET /api/v1/households/:hid/categories/:id
 func (ctl *Controller) GetByID(c *gin.Context) {
 	householdID, ok := extractHouseholdID(c)
