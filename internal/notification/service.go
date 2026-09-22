@@ -142,23 +142,29 @@ func marshalNotification(n *Notification) ([]byte, error) {
 	// Build the real-time envelope. The WebSocket clients expect the
 	// notification type as a top-level "$type" so they can route events.
 	envelope := struct {
-		Type        string `json:"type"`
-		Title       string `json:"title"`
-		Body        string `json:"body"`
-		HouseholdID uint   `json:"household_id"`
-		ListID      uint   `json:"list_id,omitempty"`
-		ItemID      uint   `json:"item_id,omitempty"`
-		ActorID     uint   `json:"actor_id,omitempty"`
-		CreatedAt   string `json:"created_at"`
+		Type          string `json:"type"`
+		Title         string `json:"title"`
+		Body          string `json:"body"`
+		HouseholdID   uint   `json:"household_id"`
+		ListID        uint   `json:"list_id,omitempty"`
+		ItemID        uint   `json:"item_id,omitempty"`
+		ActorID       uint   `json:"actor_id,omitempty"`
+		ItemName      string `json:"item_name,omitempty"`
+		ListName      string `json:"list_name,omitempty"`
+		HouseholdName string `json:"household_name,omitempty"`
+		CreatedAt     string `json:"created_at"`
 	}{
-		Type:        string(n.Type),
-		Title:       n.Title,
-		Body:        n.Body,
-		HouseholdID: n.HouseholdID,
-		ListID:      n.ListID,
-		ItemID:      n.ItemID,
-		ActorID:     n.ActorID,
-		CreatedAt:   n.CreatedAt.UTC().Format(time.RFC3339),
+		Type:          string(n.Type),
+		Title:         n.Title,
+		Body:          n.Body,
+		HouseholdID:   n.HouseholdID,
+		ListID:        n.ListID,
+		ItemID:        n.ItemID,
+		ActorID:       n.ActorID,
+		ItemName:      n.ItemName,
+		ListName:      n.ListName,
+		HouseholdName: n.HouseholdName,
+		CreatedAt:     n.CreatedAt.UTC().Format(time.RFC3339),
 	}
 
 	return json.Marshal(envelope)

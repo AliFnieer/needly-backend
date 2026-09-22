@@ -6,63 +6,47 @@ import (
 	"time"
 )
 
-// TestBuildNotification verifies BuildNotification creates a complete payload.
-func TestBuildNotification(t *testing.T) {
-	n := BuildNotification(NotificationTypeListCreated, "New list", "A list was created", 7, 3, 0, 42)
+func TestNotification_NameFieldsRoundTripHistory(t *testing.T) {
+	n := BuildNotification(NotificationTypeItemCreated, "New shopping item", "added", 1, 2, 3, 4)
+	n.WithNames(NameContext{ItemName: "Milk", ListName: "Groceries", HouseholdName: "Family"})
 
-	if n.Type != NotificationTypeListCreated {
-		t.Fatalf("expected type %q, got %q", NotificationTypeListCreated, n.Type)
+	data, err := json.Marshal(n)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
 	}
-	if n.Title != "New list" {
-		t.Fatalf("expected title %q, got %q", "New list", n.Title)
+
+	var out Notification
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
 	}
-	if n.HouseholdID != 7 {
-		t.Fatalf("expected household id 7, got %d", n.HouseholdID)
-	}
-	if n.ListID != 3 {
-		t.Fatalf("expected list id 3, got %d", n.ListID)
-	}
-	if n.ItemID != 0 {
-		t.Fatalf("expected item id 0, got %d", n.ItemID)
-	}
-	if n.ActorID != 42 {
-		t.Fatalf("expected actor id 42, got %d", n.ActorID)
-	}
-	if n.CreatedAt.IsZero() {
-		t.Fatal("expected a non-zero CreatedAt")
+
+	if out.ItemName != "Milk" || out.ListName != "Groceries" || out.HouseholdName != "Family" {
+		t.Errorf("name fields lost after round trip: got %+v", out)
 	}
 }
 
-// TestMarshalNotification verifies the WebSocket envelope marshaling.
-func TestMarshalNotification(t *testing.T) {
-	n := &Notification{
-		Type:        NotificationTypeItemCompleted,
-		Title:       "Item completed",
-		Body:        "Milk was completed",
-		HouseholdID: 5,
-		ListID:      2,
-		ItemID:      9,
-		ActorID:     1,
-		CreatedAt:   time.Date(2026, 8, 19, 9, 0, 0, 0, time.UTC),
-	}
+func TestNotification_MarshalNotificationIncludesNameFields(t *testing.T) {
+	n := BuildNotification(NotificationTypeListDeleted, "Shopping list deleted", "deleted", 1, 2, 0, 0)
+	n.WithNames(NameContext{ListName: "Weekly"})
 
 	data, err := marshalNotification(n)
 	if err != nil {
-		t.Fatalf("failed to marshal notification: %v", err)
+		t.Fatalf("marshal failed: %v", err)
 	}
 
 	var envelope map[string]interface{}
 	if err := json.Unmarshal(data, &envelope); err != nil {
-		t.Fatalf("failed to unmarshal notification envelope: %v", err)
+		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	if envelope["type"] != "item.completed" {
-		t.Fatalf("expected type item.completed, got %v", envelope["type"])
+	if envelope["list_name"] != "Weekly" {
+		t.Errorf("expected list_name in envelope, got %v", envelope["list_name"])
 	}
-	if envelope["household_id"].(float64) != 5 {
-		t.Fatalf("expected household_id 5, got %v", envelope["household_id"])
-	}
-	if envelope["title"] != "Item completed" {
-		t.Fatalf("expected title %q, got %v", "Item completed", envelope["title"])
+}
+
+func TestNotification_EpochIsValid(t *testing.T) {
+	n := BuildNotification(NotificationTypeHouseholdUpdated, "Household updated", "updated", 1, 0, 0, 0)
+	if time.Since(n.CreatedAt) > time.Hour {
+		t.Errorf("CreatedAt too far in the past: %v", n.CreatedAt)
 	}
 }

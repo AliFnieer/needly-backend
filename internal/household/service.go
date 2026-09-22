@@ -88,7 +88,7 @@ func (s *Service) Create(ownerID uint, req *CreateRequest) (*Household, error) {
 	s.notify(context.Background(), notification.NotificationTypeHouseholdCreated,
 		"Household created",
 		fmt.Sprintf("Household %q was created", household.Name),
-		household.ID, 0, 0, ownerID)
+		household.ID, 0, 0, ownerID, notification.NameContext{HouseholdName: household.Name})
 
 	return &household, nil
 }
@@ -178,7 +178,7 @@ func (s *Service) Update(id, userID uint, req *UpdateRequest) (*Household, error
 	s.notify(context.Background(), notification.NotificationTypeHouseholdUpdated,
 		"Household updated",
 		fmt.Sprintf("Household %q was updated", household.Name),
-		household.ID, 0, 0, userID)
+		household.ID, 0, 0, userID, notification.NameContext{HouseholdName: household.Name})
 
 	return &household, nil
 }
@@ -242,7 +242,7 @@ func (s *Service) Delete(id, userID uint) error {
 	s.notify(context.Background(), notification.NotificationTypeHouseholdDeleted,
 		"Household deleted",
 		fmt.Sprintf("Household %q was deleted", household.Name),
-		household.ID, 0, 0, userID)
+		household.ID, 0, 0, userID, notification.NameContext{HouseholdName: household.Name})
 
 	return nil
 }
@@ -280,7 +280,7 @@ func (s *Service) AddMember(id, ownerID uint, req *AddMemberRequest) (*Household
 	s.notify(context.Background(), notification.NotificationTypeMemberAdded,
 		"New household member",
 		fmt.Sprintf("A new member was added to household %q", household.Name),
-		household.ID, 0, 0, ownerID)
+		household.ID, 0, 0, ownerID, notification.NameContext{HouseholdName: household.Name})
 
 	return &member, nil
 }
@@ -316,18 +316,21 @@ func (s *Service) RemoveMember(id, ownerID, memberUserID uint) error {
 	s.notify(context.Background(), notification.NotificationTypeMemberRemoved,
 		"Household member removed",
 		fmt.Sprintf("A member was removed from household %q", household.Name),
-		household.ID, 0, 0, ownerID)
+		household.ID, 0, 0, ownerID, notification.NameContext{HouseholdName: household.Name})
 
 	return nil
 }
 
 // notify delivers a notification to all household members.
-func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint) {
+func (s *Service) notify(ctx context.Context, nt notification.NotificationType, title, body string, householdID, listID, itemID, actorID uint, names notification.NameContext) {
 	if s.notification == nil {
 		return
 	}
 
-	if err := s.notification.NotifyHousehold(ctx, notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)); err != nil {
+	n := notification.BuildNotification(nt, title, body, householdID, listID, itemID, actorID)
+	n.WithNames(names)
+
+	if err := s.notification.NotifyHousehold(ctx, n); err != nil {
 		slog.Error("household notification error", "error", err)
 	}
 }
