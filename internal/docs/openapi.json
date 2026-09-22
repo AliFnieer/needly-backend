@@ -2207,6 +2207,15 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "Access token for clients that cannot set the Authorization header on the WebSocket handshake (browsers, mobile). Used only when the header is absent.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
