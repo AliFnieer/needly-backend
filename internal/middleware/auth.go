@@ -14,6 +14,23 @@ const (
 	IssuerNeedlyAPI = "needly-api"
 )
 
+// AuthMiddlewareWS accepts the JWT as a `?token=` query parameter in addition
+// to the Authorization header. WebSocket clients (mobile/browser) cannot set
+// headers on the handshake, so when the header is absent the query token is
+// copied into the header before delegating to AuthMiddleware. REST routes must
+// keep using AuthMiddleware only.
+func AuthMiddlewareWS(cfg *config.Config) gin.HandlerFunc {
+	auth := AuthMiddleware(cfg)
+	return func(c *gin.Context) {
+		if c.GetHeader("Authorization") == "" {
+			if token := c.Query("token"); token != "" {
+				c.Request.Header.Set("Authorization", "Bearer "+token)
+			}
+		}
+		auth(c)
+	}
+}
+
 // AuthMiddleware validates the JWT token in the Authorization header.
 func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {

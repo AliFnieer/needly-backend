@@ -198,6 +198,82 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareWS_QueryToken_Valid(t *testing.T) {
+	cfg := testAuthConfig()
+	claims := jwt.MapClaims{
+		"user_id": float64(7),
+		"email":   "ws@example.com",
+		"iss":     cfg.JWT.Issuer,
+		"exp":     time.Now().Add(time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+	tokenStr := makeSignedToken(claims, cfg.JWT.Secret)
+
+	router := gin.New()
+	router.Use(AuthMiddlewareWS(cfg))
+	router.GET("/protected", func(c *gin.Context) {
+		uid, _ := c.Get("user_id")
+		c.JSON(http.StatusOK, gin.H{"user_id": uid})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected?token="+tokenStr, nil)
+	w := doRequest(router, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "7") {
+		t.Fatalf("expected user_id 7 in response, got: %s", w.Body.String())
+	}
+}
+
+func TestAuthMiddlewareWS_QueryToken_None(t *testing.T) {
+	cfg := testAuthConfig()
+	router := gin.New()
+	router.Use(AuthMiddlewareWS(cfg))
+	router.GET("/protected", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := doRequest(router, httptest.NewRequest(http.MethodGet, "/protected", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "authorization header is required") {
+		t.Fatalf("unexpected body: %s", w.Body.String())
+	}
+}
+
+func TestAuthMiddlewareWS_HeaderTakesPrecedence(t *testing.T) {
+	cfg := testAuthConfig()
+	claims := jwt.MapClaims{
+		"user_id": float64(7),
+		"email":   "ws@example.com",
+		"iss":     cfg.JWT.Issuer,
+		"exp":     time.Now().Add(time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+	tokenStr := makeSignedToken(claims, cfg.JWT.Secret)
+
+	router := gin.New()
+	router.Use(AuthMiddlewareWS(cfg))
+	router.GET("/protected", func(c *gin.Context) {
+		uid, _ := c.Get("user_id")
+		c.JSON(http.StatusOK, gin.H{"user_id": uid})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected?token=bogus", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	w := doRequest(router, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 when header present, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "7") {
+		t.Fatalf("expected user_id 7 in response, got: %s", w.Body.String())
+	}
+}
+
 func TestAuthMiddleware_EmptyBearerToken(t *testing.T) {
 	cfg := testAuthConfig()
 	router := gin.New()
